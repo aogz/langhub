@@ -1,0 +1,26 @@
+[phases.setup]
+nixPkgs = ['nodejs', 'nginx']
+
+[phases.install]
+cmds = ['npm ci']
+
+[phases.build]
+cmds = [
+    'npm run build',
+    'mkdir -p /var/log/nginx',
+    'mkdir -p /var/cache/nginx'
+]
+
+[start]
+cmd = 'nginx -g "daemon off;"'
+
+[nginx]
+root = '/app/build'
+
+[[nginx.dirs]]
+path = '/var/log/nginx'
+mode = '0755'
+
+[[nginx.dirs]]
+path = '/var/cache/nginx'
+mode = '0755' 

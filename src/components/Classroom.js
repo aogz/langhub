@@ -1,0 +1,1000 @@
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import Portal from './Portal';
+import UnifiedSidebar from './UnifiedSidebar';
+import { processTextWithPrompt, checkPromptAPIAvailability } from '../utils/promptAPI';
+import { 
+  getChatHistoryForText, 
+  saveChatHistoryForText, 
+  createChatSession, 
+  getAllChatSessions
+} from '../utils/chatHistoryStorage';
+
+export default function Classroom() {
+  
+  // State to hold selected text items, each with an ID, content, and collapsed state
+  const [selectedTexts, setSelectedTexts] = useState([]);
+  // State to hold chat messages
+  const [chatHistory, setChatHistory] = useState([]);
+  // State for the current message being typed by the user
+  const [currentMessage, setCurrentMessage] = useState('');
+  // State to manage the loading indicator for AI responses
+  const [loadingAction, setLoadingAction] = useState(null); // 'question' or null
+  // State for Scaledrone connection status
+  const [scaledroneStatus, setScaledroneStatus] = useState('disconnected');
+  // State to manage the history dropdown visibility
+  const [showHistory, setShowHistory] = useState(false);
+  // State for current text ID (for chat session management)
+  const [currentTextId, setCurrentTextId] = useState(null);
+  // State for chat sessions (for history dropdown)
+  const [chatSessions, setChatSessions] = useState([]);
+
+  const [activeQuestionContext, setActiveQuestionContext] = useState({ originalText: null, question: null });
+  // Speech Recognition State
+  const [isListening, setIsListening] = useState(false);
+  const [isSpeechRecognitionSupported, setIsSpeechRecognitionSupported] = useState(false);
+  const [showBrowserWarning, setShowBrowserWarning] = useState(false);
+  const recognitionRef = useRef(null);
+  // Ref for the chat messages container to enable auto-scrolling
+  const chatMessagesRef = useRef(null);
+  // Ref for the selected texts container to enable auto-scrolling
+  const selectedTextsRef = useRef(null);
+  // Ref to store Scaledrone instance
+  const droneRef = useRef(null);
+  // Ref to store Scaledrone room
+  const roomRef = useRef(null);
+
+  const [isVocabIconBlinking, setIsVocabIconBlinking] = useState(false);
+  const [isTextbookIconBlinking, setIsTextbookIconBlinking] = useState(false);
+  
+  
+  // Mobile sidebar state
+  const [showMobileSidebar, setShowMobileSidebar] = useState(false);
+
+  // Immersive mode state
+  const [isImmersiveMode, setIsImmersiveMode] = useState(false);
+  // Desktop sidebar width (px), resizable on desktop only
+  const [desktopSidebarWidth, setDesktopSidebarWidth] = useState(480);
+  const [isResizingSidebar, setIsResizingSidebar] = useState(false);
+  const sidebarResizeStartXRef = useRef(0);
+  const sidebarStartWidthRef = useRef(0);
+  
+  // Floating window drag and resize state
+  const [floatingWindowPosition, setFloatingWindowPosition] = useState({ x: 0, y: 0 });
+  const [floatingWindowSize, setFloatingWindowSize] = useState({ width: 600, height: 700 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
+  const [resizeDirection, setResizeDirection] = useState('');
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [resizeStartPos, setResizeStartPos] = useState({ x: 0, y: 0 });
+  const [resizeStartSize, setResizeStartSize] = useState({ width: 0, height: 0 });
+  const floatingWindowRef = useRef(null);
+  
+  // User preferences loading state
+  const [preferencesLoaded, setPreferencesLoaded] = useState(false);
+  const saveTimeoutRef = useRef(null);
+
+  // Scaledrone configuration
+  const SCALEDRONE_CHANNEL_ID = 'br4FkhdzF498EuJA'; // Same as in content script
+
+  // Load chat sessions for history dropdown
+  const loadChatSessions = useCallback(() => {
+    const sessions = getAllChatSessions();
+    setChatSessions(sessions);
+  }, []);
+
+  // Load chat history for a specific text
+  const loadChatHistoryForText = useCallback((textId) => {
+    const history = getChatHistoryForText(textId);
+    setChatHistory(history);
+    setCurrentTextId(textId);
+  }, []);
+
+  // Save current chat history
+  const saveCurrentChatHistory = useCallback(() => {
+    if (currentTextId && chatHistory.length > 0) {
+      saveChatHistoryForText(currentTextId, chatHistory);
+    }
+  }, [currentTextId, chatHistory]);
+
+  // Create new chat session for text
+  const createNewChatSession = useCallback((textId, textContent, source) => {
+    createChatSession(textId, textContent, source);
+    setChatHistory([]);
+    setCurrentTextId(textId);
+    loadChatSessions();
+  }, [loadChatSessions]);
+
+  // Switch to a different chat session
+  const switchToChatSession = useCallback((textId) => {
+    // Save current chat history before switching
+    saveCurrentChatHistory();
+    
+    // Load the selected chat session
+    loadChatHistoryForText(textId);
+    
+    // Close history dropdown
+    setShowHistory(false);
+  }, [saveCurrentChatHistory, loadChatHistoryForText]);
+
+  // Load chat sessions on component mount
+  useEffect(() => {
+    loadChatSessions();
+  }, [loadChatSessions]);
+
+  // Save chat history whenever it changes
+  useEffect(() => {
+    if (currentTextId && chatHistory.length > 0) {
+      const timeoutId = setTimeout(() => {
+        saveChatHistoryForText(currentTextId, chatHistory);
+      }, 1000); // Debounce saves by 1 second
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [currentTextId, chatHistory]);
+
+  // Function to handle sending a message (user or AI)
+  const sendMessage = useCallback(async (message, sender = 'user') => {
+    if (!message.trim()) return;
+
+    // Add user message to chat history
+    setChatHistory(prev => [...prev, { text: message, sender }]);
+    setCurrentMessage(''); // Clear input field
+
+    // If it's a user message, get AI response from backend
+    if (sender === 'user') {
+      setLoadingAction('question'); // Set loading action for user messages
+      try {
+        const isAnsweringQuestion = activeQuestionContext.question && activeQuestionContext.originalText;
+        
+        let requestBody;
+        if (isAnsweringQuestion) {
+          requestBody = {
+            text: message,
+            actionType: 'answer',
+            originalText: activeQuestionContext.originalText,
+            originalQuestion: activeQuestionContext.question,
+          };
+        } else {
+          requestBody = {
+            text: message,
+            actionType: 'question',
+          };
+        }
+
+        // Use Prompt API instead of server request
+        const data = await processTextWithPrompt(message, requestBody.actionType, {
+          originalText: requestBody.originalText,
+          originalQuestion: requestBody.originalQuestion
+        });
+
+        setChatHistory(prev => [...prev, { text: data.response, sender: 'ai', actionType: data.actionType }]);
+        
+        // If the AI's response is a question, set it as the new active question.
+        if (data.actionType === 'question') {
+          setActiveQuestionContext({
+            originalText: isAnsweringQuestion ? activeQuestionContext.originalText : message,
+            question: data.response,
+          });
+        } else {
+          // If it's just feedback, clear the question context.
+          setActiveQuestionContext({ originalText: null, question: null });
+        }
+
+      } catch (error) {
+        console.error("Error getting AI response:", error);
+        
+        // Check if it's a Prompt API availability error
+        const availabilityCheck = await checkPromptAPIAvailability();
+        if (!availabilityCheck.available) {
+          setChatHistory(prev => [...prev, { 
+            text: `AI features require Chrome 138+ with Prompt API support. ${availabilityCheck.error || 'Please update your browser.'}`, 
+            sender: 'ai', 
+            actionType: 'error' 
+          }]);
+        } else {
+          setChatHistory(prev => [...prev, { 
+            text: `Sorry, I couldn't get a response from the AI: ${error.message}`, 
+            sender: 'ai', 
+            actionType: 'error' 
+          }]);
+        }
+      } finally {
+        setLoadingAction(null);
+      }
+    }
+  }, [activeQuestionContext]);
+
+  // Function to reconnect to Scaledrone
+  const reconnectScaledrone = () => {
+    if (droneRef.current) {
+      droneRef.current.close();
+    }
+    setScaledroneStatus('disconnected');
+    setTimeout(() => {
+      initializeScaledrone();
+    }, 1000);
+  };
+
+  // --- Speech Recognition Setup ---
+  useEffect(() => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const isSupported = !!SpeechRecognition;
+    setIsSpeechRecognitionSupported(isSupported);
+
+    if (!isSupported) return;
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = 'nl-NL';
+
+    recognition.onstart = () => {
+      setIsListening(true);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    recognition.onerror = (event) => {
+      console.error('Speech recognition error:', event.error);
+      setIsListening(false);
+    };
+
+    recognition.onresult = (event) => {
+      const transcript = Array.from(event.results)
+        .map(result => result[0])
+        .map(result => result.transcript)
+        .join('');
+      
+      setCurrentMessage(transcript);
+
+      // Check if the speech recognition has finalized
+      if (event.results[0].isFinal) {
+        // Automatically send the message once the user stops talking
+        sendMessage(transcript);
+      }
+    };
+
+    recognitionRef.current = recognition;
+
+    return () => {
+      recognition.stop();
+    };
+  }, [sendMessage]);
+
+  const handleMicClick = () => {
+    if (isListening) {
+      recognitionRef.current?.stop();
+    } else {
+      recognitionRef.current?.start();
+    }
+  };
+
+  // Handle text selection messages from content script
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const handleTextSelectionMessage = useCallback((message) => {
+    console.log('Received text selection message:', message);
+    
+    if (message.data && message.data.type === 'text-selection' && message.data.text) {
+      console.log('Processing text selection:', {
+        text: message.data.text.substring(0, 100) + '...',
+        url: message.data.url,
+        title: message.data.title
+      });
+      
+      const newText = {
+        id: Date.now(),
+        content: message.data.text,
+        isCollapsed: false, // Keep new text blocks collapsed by default
+        source: {
+          url: message.data.url,
+          title: message.data.title,
+          timestamp: message.data.timestamp
+        }
+      };
+      
+      console.log('Adding new text to selectedTexts:', newText);
+      setSelectedTexts(prev => {
+        const updated = [...prev, newText];
+        console.log('Updated selectedTexts:', updated);
+        return updated;
+      });
+      
+      // Save current chat history before switching to new text
+      saveCurrentChatHistory();
+      
+      // Create new chat session for the new text
+      createNewChatSession(newText.id, newText.content, newText.source);
+      
+      // Clear active contexts for new text
+      setActiveQuestionContext({ originalText: null, question: null });
+      
+      // Auto-open mobile sidebar when text is selected
+      setShowMobileSidebar(true);
+      // Notify product tour that a selection exists
+      setTimeout(() => {
+        window.dispatchEvent(new Event('langhub:text-selected'));
+      }, 0);
+    } else if (message.data && message.data.type === 'vocabulary_added') {
+      console.log('Vocabulary word added, triggering animation');
+      // Trigger the colorful vocabulary animation
+      handleWordAddedToVocab();
+    } else {
+      console.warn('Invalid message:', message);
+    }
+  }, [saveCurrentChatHistory, createNewChatSession]);
+
+  // Create Scaledrone connection
+  const createScaledroneConnection = useCallback(() => {
+    try {
+      droneRef.current = new window.Scaledrone(SCALEDRONE_CHANNEL_ID, {
+        data: {
+          name: 'langhub-app',
+          color: '#3B82F6'
+        }
+      });
+
+      droneRef.current.on('open', (error) => {
+        if (error) {
+          console.error('Scaledrone connection error:', error);
+          setScaledroneStatus('error');
+          return;
+        }
+        console.log('Connected to Scaledrone');
+        setScaledroneStatus('connected');
+        
+        // Join the same room as the content script
+        roomRef.current = droneRef.current.subscribe('text-selections');
+        
+        // Listen for messages from the content script
+        roomRef.current.on('message', (message) => {
+          console.log('Received message from content script:', message);
+          handleTextSelectionMessage(message);
+        });
+      });
+
+      droneRef.current.on('error', (error) => {
+        console.error('Scaledrone error:', error);
+        setScaledroneStatus('error');
+      });
+
+      droneRef.current.on('close', (event) => {
+        console.log('Scaledrone connection closed:', event);
+        setScaledroneStatus('disconnected');
+      });
+
+    } catch (error) {
+      console.error('Failed to create Scaledrone connection:', error);
+      setScaledroneStatus('error');
+    }
+  }, [handleTextSelectionMessage]);
+
+  // Initialize Scaledrone connection
+  const initializeScaledrone = useCallback(() => {
+    try {
+      // Load Scaledrone script if not already loaded
+      if (typeof window.Scaledrone === 'undefined') {
+        const script = document.createElement('script');
+        script.src = 'https://cdn.scaledrone.com/scaledrone.min.js';
+        script.onload = () => {
+          console.log('Scaledrone script loaded');
+          createScaledroneConnection();
+        };
+        script.onerror = () => {
+          console.error('Failed to load Scaledrone script');
+          setScaledroneStatus('error');
+        };
+        document.head.appendChild(script);
+      } else {
+        createScaledroneConnection();
+      }
+    } catch (error) {
+      console.error('Failed to initialize Scaledrone:', error);
+      setScaledroneStatus('error');
+    }
+  }, [createScaledroneConnection]);
+
+  // Load desktop sidebar width from localStorage (desktop only)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (window.innerWidth < 1024) return;
+    try {
+      const stored = localStorage.getItem('langhub.desktopSidebarWidth');
+      if (stored) {
+        const parsed = parseInt(stored, 10);
+        if (!Number.isNaN(parsed)) {
+          const minSidebarWidth = 300;
+          const minMainWidth = 400;
+          const maxSidebarWidth = Math.max(minSidebarWidth, window.innerWidth - minMainWidth);
+          setDesktopSidebarWidth(Math.min(Math.max(parsed, minSidebarWidth), maxSidebarWidth));
+        }
+      }
+    } catch (_) {}
+  }, []);
+
+  // Keep desktop sidebar width within viewport bounds on resize (desktop only)
+  useEffect(() => {
+    const onWindowResize = () => {
+      if (window.innerWidth < 1024) return;
+      setDesktopSidebarWidth(prev => {
+        const minSidebarWidth = 300;
+        const minMainWidth = 400;
+        const maxSidebarWidth = Math.max(minSidebarWidth, window.innerWidth - minMainWidth);
+        return Math.min(Math.max(prev, minSidebarWidth), maxSidebarWidth);
+      });
+    };
+    window.addEventListener('resize', onWindowResize);
+    return () => window.removeEventListener('resize', onWindowResize);
+  }, []);
+
+  // Start sidebar resize (desktop only)
+  const startDesktopSidebarResize = useCallback((e) => {
+    if (window.innerWidth < 1024 || isImmersiveMode) return;
+    setIsResizingSidebar(true);
+    sidebarResizeStartXRef.current = e.clientX;
+    sidebarStartWidthRef.current = desktopSidebarWidth;
+    e.preventDefault();
+  }, [desktopSidebarWidth, isImmersiveMode]);
+
+  // Handle sidebar resize mousemove/up
+  useEffect(() => {
+    if (!isResizingSidebar) return;
+    const handleMouseMove = (e) => {
+      const deltaX = e.clientX - sidebarResizeStartXRef.current;
+      const minSidebarWidth = 300;
+      const minMainWidth = 400;
+      const maxSidebarWidth = Math.max(minSidebarWidth, window.innerWidth - minMainWidth);
+      // Invert direction so dragging left increases right sidebar width (expected UX)
+      const next = Math.min(Math.max(sidebarStartWidthRef.current - deltaX, minSidebarWidth), maxSidebarWidth);
+      setDesktopSidebarWidth(next);
+    };
+    const handleMouseUp = () => {
+      setIsResizingSidebar(false);
+      try {
+        localStorage.setItem('langhub.desktopSidebarWidth', String(desktopSidebarWidth));
+      } catch (_) {}
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [isResizingSidebar, desktopSidebarWidth]);
+
+  // Load user preferences from database
+  const loadUserPreferences = useCallback(async () => {
+    if (preferencesLoaded) return;
+    
+    try {
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/user-preferences/classroom`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const preferences = await response.json();
+        
+        // Apply loaded preferences
+        if (preferences.isImmersiveMode !== undefined) {
+          // Enforce desktop-only immersive mode, ignore saved value on mobile
+          if (window.innerWidth < 1024) {
+            setIsImmersiveMode(false);
+          } else {
+            setIsImmersiveMode(preferences.isImmersiveMode);
+          }
+        }
+        
+        if (preferences.floatingWindowPosition) {
+          // Validate position is within current viewport
+          const x = Math.max(0, Math.min(preferences.floatingWindowPosition.x, window.innerWidth - (preferences.floatingWindowSize?.width || 600)));
+          const y = Math.max(0, Math.min(preferences.floatingWindowPosition.y, window.innerHeight - (preferences.floatingWindowSize?.height || 700)));
+          setFloatingWindowPosition({ x, y });
+        } else {
+          // Default position if none saved
+          setFloatingWindowPosition({ x: window.innerWidth - 616, y: 16 });
+        }
+        
+        if (preferences.floatingWindowSize) {
+          // Validate size constraints
+          const width = Math.max(400, Math.min(preferences.floatingWindowSize.width, window.innerWidth));
+          const height = Math.max(400, Math.min(preferences.floatingWindowSize.height, window.innerHeight));
+          setFloatingWindowSize({ width, height });
+        }
+      } else {
+        // Set default position if no preferences found
+        setFloatingWindowPosition({ x: window.innerWidth - 616, y: 16 });
+      }
+    } catch (error) {
+      console.error('Error loading user preferences:', error);
+      // Set default position on error
+      setFloatingWindowPosition({ x: window.innerWidth - 616, y: 16 });
+    } finally {
+      setPreferencesLoaded(true);
+    }
+  }, [preferencesLoaded]);
+
+  // Save user preferences to database (debounced)
+  const saveUserPreferences = useCallback(async () => {
+    try {
+      const preferences = {
+        isImmersiveMode,
+        floatingWindowPosition,
+        floatingWindowSize,
+        lastUpdated: new Date().toISOString()
+      };
+
+      await fetch(`${process.env.REACT_APP_API_URL}/api/user-preferences/classroom`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(preferences)
+      });
+    } catch (error) {
+      console.error('Error saving user preferences:', error);
+      // Fail silently - preferences are not critical
+    }
+  }, [isImmersiveMode, floatingWindowPosition, floatingWindowSize]);
+
+  // Debounced save function to avoid too many API calls
+  const debouncedSavePreferences = useCallback(() => {
+    if (!preferencesLoaded) return; // Don't save before preferences are loaded
+    
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+    
+    saveTimeoutRef.current = setTimeout(() => {
+      saveUserPreferences();
+    }, 1000); // Save after 1 second of inactivity
+  }, [saveUserPreferences, preferencesLoaded]);
+
+  // Load user preferences on component mount
+  useEffect(() => {
+    loadUserPreferences();
+  }, [loadUserPreferences]);
+
+  // Handle window resize to exit immersive mode on mobile
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 1024 && isImmersiveMode) {
+        setIsImmersiveMode(false);
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [isImmersiveMode]);
+
+  // Also enforce on initial mount (in case immersive was saved on desktop and now opened on mobile)
+  useEffect(() => {
+    if (preferencesLoaded && window.innerWidth < 1024 && isImmersiveMode) {
+      setIsImmersiveMode(false);
+    }
+  }, [preferencesLoaded, isImmersiveMode]);
+
+  // Save preferences when immersive mode changes
+  useEffect(() => {
+    if (preferencesLoaded) {
+      debouncedSavePreferences();
+    }
+  }, [isImmersiveMode, debouncedSavePreferences, preferencesLoaded]);
+
+  // Save preferences when floating window position changes
+  useEffect(() => {
+    if (preferencesLoaded) {
+      debouncedSavePreferences();
+    }
+  }, [floatingWindowPosition, debouncedSavePreferences, preferencesLoaded]);
+
+  // Save preferences when floating window size changes
+  useEffect(() => {
+    if (preferencesLoaded) {
+      debouncedSavePreferences();
+    }
+  }, [floatingWindowSize, debouncedSavePreferences, preferencesLoaded]);
+
+  // Initialize Scaledrone on component mount
+  useEffect(() => {
+    initializeScaledrone();
+
+    // Cleanup function
+    return () => {
+      if (droneRef.current) {
+        droneRef.current.close();
+      }
+      // Clean up save timeout
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [initializeScaledrone]);
+
+  // Effect to scroll to the bottom of the chat history when new messages are added
+  useEffect(() => {
+    if (chatMessagesRef.current) {
+      chatMessagesRef.current.scrollTop = chatMessagesRef.current.scrollHeight;
+    }
+  }, [chatHistory]);
+
+  // Effect to scroll to the bottom of selected texts when new selections are added
+  useEffect(() => {
+    if (selectedTextsRef.current) {
+      selectedTextsRef.current.scrollTop = selectedTextsRef.current.scrollHeight;
+    }
+  }, [selectedTexts]);
+
+  const handleWordAddedToVocab = () => {
+    // Trigger colorful vocabulary animation on textbook icon
+    setIsVocabIconBlinking(true);
+    setTimeout(() => {
+      setIsVocabIconBlinking(false);
+    }, 2000); // Duration of the animation
+  };
+
+  // Get current source information for vocabulary entries
+  const getCurrentSource = useCallback(() => {
+    return {
+      url: window.location.href,
+      title: document.title
+    };
+  }, []);
+
+
+
+  const toggleImmersiveMode = () => {
+    // Prevent immersive mode on mobile devices
+    if (window.innerWidth < 1024) { // lg breakpoint
+      return;
+    }
+    
+    setIsImmersiveMode(prev => {
+      const newMode = !prev;
+      // Close mobile sidebar when entering immersive mode
+      if (newMode) {
+        setShowMobileSidebar(false);
+        // Only initialize position if preferences haven't been loaded yet
+        if (!preferencesLoaded) {
+          setFloatingWindowPosition({ x: window.innerWidth - floatingWindowSize.width - 16, y: 16 });
+        }
+        // Notify product tour that immersive window can be targeted
+        setTimeout(() => {
+          window.dispatchEvent(new Event('langhub:immersive-ready'));
+        }, 0);
+      }
+      return newMode;
+    });
+  };
+
+  // Drag handlers for floating window
+  const handleMouseDown = useCallback((e) => {
+    if (!floatingWindowRef.current) return;
+    
+    setIsDragging(true);
+    const rect = floatingWindowRef.current.getBoundingClientRect();
+    setDragOffset({
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    });
+    e.preventDefault();
+  }, []);
+
+  const handleMouseMove = useCallback((e) => {
+    if (isDragging) {
+      const newX = e.clientX - dragOffset.x;
+      const newY = e.clientY - dragOffset.y;
+      
+      // Keep window within viewport bounds
+      const boundedX = Math.max(0, Math.min(newX, window.innerWidth - floatingWindowSize.width));
+      const boundedY = Math.max(0, Math.min(newY, window.innerHeight - floatingWindowSize.height));
+      
+      setFloatingWindowPosition({ x: boundedX, y: boundedY });
+    } else if (isResizing) {
+      const deltaX = e.clientX - resizeStartPos.x;
+      const deltaY = e.clientY - resizeStartPos.y;
+      
+      let newWidth = resizeStartSize.width;
+      let newHeight = resizeStartSize.height;
+      let newX = floatingWindowPosition.x;
+      let newY = floatingWindowPosition.y;
+      
+      // Handle different resize directions
+      if (resizeDirection.includes('right')) {
+        newWidth = Math.max(400, Math.min(resizeStartSize.width + deltaX, window.innerWidth - floatingWindowPosition.x));
+      }
+      if (resizeDirection.includes('left')) {
+        const maxDelta = resizeStartSize.width - 400;
+        const constrainedDelta = Math.max(-maxDelta, Math.min(deltaX, floatingWindowPosition.x));
+        newWidth = resizeStartSize.width - constrainedDelta;
+        newX = floatingWindowPosition.x + constrainedDelta;
+      }
+      if (resizeDirection.includes('bottom')) {
+        newHeight = Math.max(400, Math.min(resizeStartSize.height + deltaY, window.innerHeight - floatingWindowPosition.y));
+      }
+      if (resizeDirection.includes('top')) {
+        const maxDelta = resizeStartSize.height - 400;
+        const constrainedDelta = Math.max(-maxDelta, Math.min(deltaY, floatingWindowPosition.y));
+        newHeight = resizeStartSize.height - constrainedDelta;
+        newY = floatingWindowPosition.y + constrainedDelta;
+      }
+      
+      setFloatingWindowSize({ width: newWidth, height: newHeight });
+      setFloatingWindowPosition({ x: newX, y: newY });
+    }
+  }, [isDragging, isResizing, dragOffset, resizeDirection, resizeStartPos, resizeStartSize, floatingWindowSize, floatingWindowPosition]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+    setIsResizing(false);
+    setResizeDirection('');
+  }, []);
+
+  const handleResizeStart = useCallback((e, direction) => {
+    e.stopPropagation(); // Prevent dragging when resizing
+    setIsResizing(true);
+    setResizeDirection(direction);
+    setResizeStartPos({ x: e.clientX, y: e.clientY });
+    setResizeStartSize({ width: floatingWindowSize.width, height: floatingWindowSize.height });
+    e.preventDefault();
+  }, [floatingWindowSize]);
+
+  // Add global mouse event listeners for dragging and resizing
+  useEffect(() => {
+    if (isDragging || isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      document.body.style.userSelect = 'none'; // Prevent text selection while dragging/resizing
+      
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+        document.body.style.userSelect = '';
+      };
+    }
+  }, [isDragging, isResizing, handleMouseMove, handleMouseUp]);
+
+
+  return (
+    <div className="h-screen flex flex-col lg:flex-row bg-gradient-to-br from-gray-900 to-gray-800 overflow-hidden">
+      {/* Main Content Area - full width on mobile, responsive on desktop, full width in immersive mode */}
+      <div className={`${isImmersiveMode ? 'w-full h-full lg:w-full p-0' : 'w-full h-full flex-1 min-w-0 lg:min-w-[400px] p-1 lg:p-2'}`}>
+        <div className={`relative h-full bg-gray-950 overflow-hidden ${isImmersiveMode ? '' : 'rounded-xl shadow-lg border border-gray-700'}`}>
+          {/* Placeholder for the iframe */}
+          <iframe
+            src="https://webfu.se/+langhub"
+            title="Main Content"
+            className="w-full h-full border-none"
+            data-tour="iframe"
+            style={{
+              // Mobile-specific iframe improvements
+              transform: 'scale(1)',
+              transformOrigin: 'top left',
+              // Ensure proper mobile viewport
+              width: '100%',
+              height: '100%',
+              // Prevent zoom issues on mobile
+              maxWidth: '100vw',
+              maxHeight: '100vh'
+            }}
+          ></iframe>
+          
+          {/* Overlay when no text is selected */}
+          {selectedTexts.length === 0 && (
+            <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-10 pointer-events-none lg:hidden">
+              <div className="flex items-center p-0.5 bg-gradient-to-r from-pink-500 via-purple-600 to-indigo-500 rounded-full shadow-xl shadow-purple-500/30">
+                <div className="bg-gray-900/90 backdrop-blur-sm text-white py-2 px-4 lg:py-3 lg:px-6 rounded-full">
+                  <p className="text-sm lg:text-lg font-medium animate-pulse text-center">Select any text on the page to get started</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Immersive Mode Floating Sidebar */}
+          {isImmersiveMode && (
+            <div 
+              ref={floatingWindowRef}
+              className="absolute z-50"
+              style={{
+                left: `${floatingWindowPosition.x}px`,
+                top: `${floatingWindowPosition.y}px`,
+                width: `${floatingWindowSize.width}px`,
+                height: `${floatingWindowSize.height}px`,
+                cursor: isDragging ? 'grabbing' : isResizing ? 'resizing' : 'auto'
+              }}
+              data-tour="immersive-window"
+            >
+                            <UnifiedSidebar
+                mode="immersive"
+                selectedTexts={selectedTexts}
+                selectedTextsRef={selectedTextsRef}
+                setSelectedTexts={setSelectedTexts}
+                showHistory={showHistory}
+                setShowHistory={setShowHistory}
+                chatHistory={chatHistory}
+                chatMessagesRef={chatMessagesRef}
+                currentMessage={currentMessage}
+                setCurrentMessage={setCurrentMessage}
+                sendMessage={sendMessage}
+                loadingAction={loadingAction}
+                setLoadingAction={setLoadingAction}
+                handleWordAddedToVocab={handleWordAddedToVocab}
+                isListening={isListening}
+                handleMicClick={handleMicClick}
+                isSpeechRecognitionSupported={isSpeechRecognitionSupported}
+                showBrowserWarning={showBrowserWarning}
+                setShowBrowserWarning={setShowBrowserWarning}
+                getCurrentSource={getCurrentSource}
+                setActiveQuestionContext={setActiveQuestionContext}
+                activeQuestionContext={activeQuestionContext}
+                setChatHistory={setChatHistory}
+                setIsTextbookIconBlinking={setIsTextbookIconBlinking}
+                scaledroneStatus={scaledroneStatus}
+                reconnectScaledrone={reconnectScaledrone}
+            isVocabIconBlinking={isVocabIconBlinking}
+            isTextbookIconBlinking={isTextbookIconBlinking}
+                isImmersiveMode={isImmersiveMode}
+                toggleImmersiveMode={toggleImmersiveMode}
+                onClose={null}
+                handleMouseDown={handleMouseDown}
+                isDragging={isDragging}
+                handleResizeStart={handleResizeStart}
+                // Chat session management
+                chatSessions={chatSessions}
+                switchToChatSession={switchToChatSession}
+                currentTextId={currentTextId}
+              />
+                        </div>
+                      )}
+                  </div>
+                </div>
+
+      {/* Desktop resizer between main and sidebar (only on desktop, non-immersive) */}
+      {!isImmersiveMode && (
+        <div
+          className="hidden lg:block w-1 cursor-col-resize bg-gray-800 hover:bg-gray-700 transition-colors"
+          onMouseDown={startDesktopSidebarResize}
+          title="Resize sidebar"
+          aria-label="Resize sidebar"
+        />
+      )}
+
+      {/* Desktop Sidebar - hidden on mobile and in immersive mode */}
+      {!isImmersiveMode && (
+        <UnifiedSidebar
+          mode="desktop"
+          selectedTexts={selectedTexts}
+          selectedTextsRef={selectedTextsRef}
+          setSelectedTexts={setSelectedTexts}
+          showHistory={showHistory}
+          setShowHistory={setShowHistory}
+          chatHistory={chatHistory}
+          chatMessagesRef={chatMessagesRef}
+          currentMessage={currentMessage}
+          setCurrentMessage={setCurrentMessage}
+          sendMessage={sendMessage}
+          loadingAction={loadingAction}
+          setLoadingAction={setLoadingAction}
+          handleWordAddedToVocab={handleWordAddedToVocab}
+          isListening={isListening}
+          handleMicClick={handleMicClick}
+          isSpeechRecognitionSupported={isSpeechRecognitionSupported}
+          showBrowserWarning={showBrowserWarning}
+          setShowBrowserWarning={setShowBrowserWarning}
+          getCurrentSource={getCurrentSource}
+          setActiveQuestionContext={setActiveQuestionContext}
+          activeQuestionContext={activeQuestionContext}
+          setChatHistory={setChatHistory}
+          setIsTextbookIconBlinking={setIsTextbookIconBlinking}
+          scaledroneStatus={scaledroneStatus}
+          reconnectScaledrone={reconnectScaledrone}
+          isVocabIconBlinking={isVocabIconBlinking}
+          isTextbookIconBlinking={isTextbookIconBlinking}
+          isImmersiveMode={isImmersiveMode}
+          toggleImmersiveMode={toggleImmersiveMode}
+          onClose={null}
+          handleMouseDown={null}
+          isDragging={isDragging}
+          handleResizeStart={null}
+          desktopSidebarWidth={desktopSidebarWidth}
+          // Chat session management
+          chatSessions={chatSessions}
+          switchToChatSession={switchToChatSession}
+          currentTextId={currentTextId}
+        />
+      )}
+
+      {/* Overlay to capture mouse events over iframe during sidebar resize (desktop only) */}
+      {isResizingSidebar && !isImmersiveMode && (
+        <div
+          className="fixed inset-0 z-[9999] cursor-col-resize"
+          onMouseUp={() => {
+            setIsResizingSidebar(false);
+            try {
+              localStorage.setItem('langhub.desktopSidebarWidth', String(desktopSidebarWidth));
+            } catch (_) {}
+          }}
+        />
+      )}
+      
+      {/* Mobile FAB - only visible on mobile AFTER a text has been selected */}
+      {selectedTexts.length > 0 && (
+        <div className="lg:hidden fixed bottom-6 right-6 z-50">
+          <button
+            onClick={() => setShowMobileSidebar(true)}
+            className="w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg flex items-center justify-center transition-all duration-300 transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-blue-500/30 relative group"
+          >
+            {/* Sparkle effects */}
+            <div className="absolute inset-0 rounded-full overflow-hidden">
+              <div className="absolute top-1 left-1 w-1 h-1 bg-yellow-300 rounded-full animate-ping opacity-75"></div>
+              <div className="absolute top-2 right-2 w-0.5 h-0.5 bg-yellow-300 rounded-full animate-ping opacity-75" style={{animationDelay: '0.5s'}}></div>
+              <div className="absolute bottom-2 left-2 w-0.5 h-0.5 bg-yellow-300 rounded-full animate-ping opacity-75" style={{animationDelay: '1s'}}></div>
+              <div className="absolute bottom-1 right-1 w-1 h-1 bg-yellow-300 rounded-full animate-ping opacity-75" style={{animationDelay: '1.5s'}}></div>
+            </div>
+            <span className="text-xl relative z-10">✨</span>
+          </button>
+        </div>
+      )}
+      
+      {/* Mobile Sidebar Popup */}
+      {showMobileSidebar && (
+        <Portal>
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[9999] lg:hidden">
+            <div className="absolute right-0 top-0 h-full w-full max-w-sm bg-gray-900/95 backdrop-blur-sm border-l border-gray-700 shadow-2xl transition-all duration-300 ease-in-out">
+              <UnifiedSidebar
+                mode="mobile"
+                selectedTexts={selectedTexts}
+                selectedTextsRef={selectedTextsRef}
+                setSelectedTexts={setSelectedTexts}
+                showHistory={showHistory}
+                setShowHistory={setShowHistory}
+                chatHistory={chatHistory}
+                chatMessagesRef={chatMessagesRef}
+                currentMessage={currentMessage}
+                setCurrentMessage={setCurrentMessage}
+                sendMessage={sendMessage}
+                loadingAction={loadingAction}
+                setLoadingAction={setLoadingAction}
+                handleWordAddedToVocab={handleWordAddedToVocab}
+                isListening={isListening}
+                handleMicClick={handleMicClick}
+                isSpeechRecognitionSupported={isSpeechRecognitionSupported}
+                showBrowserWarning={showBrowserWarning}
+                setShowBrowserWarning={setShowBrowserWarning}
+                getCurrentSource={getCurrentSource}
+                setActiveQuestionContext={setActiveQuestionContext}
+                activeQuestionContext={activeQuestionContext}
+                setChatHistory={setChatHistory}
+                setIsTextbookIconBlinking={setIsTextbookIconBlinking}
+                scaledroneStatus={scaledroneStatus}
+                reconnectScaledrone={reconnectScaledrone}
+                  isVocabIconBlinking={isVocabIconBlinking}
+                  isTextbookIconBlinking={isTextbookIconBlinking}
+                isImmersiveMode={isImmersiveMode}
+                toggleImmersiveMode={toggleImmersiveMode}
+                  onClose={() => setShowMobileSidebar(false)}
+                handleMouseDown={null}
+                isDragging={isDragging}
+                handleResizeStart={null}
+                // Chat session management
+                chatSessions={chatSessions}
+                switchToChatSession={switchToChatSession}
+                currentTextId={currentTextId}
+              />
+            </div>
+          </div>
+        </Portal>
+      )}
+      
+    </div>
+  );
+}
