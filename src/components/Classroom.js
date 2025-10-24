@@ -19,8 +19,6 @@ export default function Classroom() {
   const [currentMessage, setCurrentMessage] = useState('');
   // State to manage the loading indicator for AI responses
   const [loadingAction, setLoadingAction] = useState(null); // 'question' or null
-  // State for Scaledrone connection status
-  const [scaledroneStatus, setScaledroneStatus] = useState('disconnected');
   // State to manage the history dropdown visibility
   const [showHistory, setShowHistory] = useState(false);
   // State for current text ID (for chat session management)
@@ -38,10 +36,6 @@ export default function Classroom() {
   const chatMessagesRef = useRef(null);
   // Ref for the selected texts container to enable auto-scrolling
   const selectedTextsRef = useRef(null);
-  // Ref to store Scaledrone instance
-  const droneRef = useRef(null);
-  // Ref to store Scaledrone room
-  const roomRef = useRef(null);
 
   const [isVocabIconBlinking, setIsVocabIconBlinking] = useState(false);
   const [isTextbookIconBlinking, setIsTextbookIconBlinking] = useState(false);
@@ -70,11 +64,6 @@ export default function Classroom() {
   const floatingWindowRef = useRef(null);
   
   // User preferences loading state
-  const [preferencesLoaded, setPreferencesLoaded] = useState(false);
-  const saveTimeoutRef = useRef(null);
-
-  // Scaledrone configuration
-  const SCALEDRONE_CHANNEL_ID = 'br4FkhdzF498EuJA'; // Same as in content script
 
   // Load chat sessions for history dropdown
   const loadChatSessions = useCallback(() => {
@@ -204,17 +193,6 @@ export default function Classroom() {
     }
   }, [activeQuestionContext]);
 
-  // Function to reconnect to Scaledrone
-  const reconnectScaledrone = () => {
-    if (droneRef.current) {
-      droneRef.current.close();
-    }
-    setScaledroneStatus('disconnected');
-    setTimeout(() => {
-      initializeScaledrone();
-    }, 1000);
-  };
-
   // --- Speech Recognition Setup ---
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -325,76 +303,6 @@ export default function Classroom() {
     }
   }, [saveCurrentChatHistory, createNewChatSession]);
 
-  // Create Scaledrone connection
-  const createScaledroneConnection = useCallback(() => {
-    try {
-      droneRef.current = new window.Scaledrone(SCALEDRONE_CHANNEL_ID, {
-        data: {
-          name: 'langhub-app',
-          color: '#3B82F6'
-        }
-      });
-
-      droneRef.current.on('open', (error) => {
-        if (error) {
-          console.error('Scaledrone connection error:', error);
-          setScaledroneStatus('error');
-          return;
-        }
-        console.log('Connected to Scaledrone');
-        setScaledroneStatus('connected');
-        
-        // Join the same room as the content script
-        roomRef.current = droneRef.current.subscribe('text-selections');
-        
-        // Listen for messages from the content script
-        roomRef.current.on('message', (message) => {
-          console.log('Received message from content script:', message);
-          handleTextSelectionMessage(message);
-        });
-      });
-
-      droneRef.current.on('error', (error) => {
-        console.error('Scaledrone error:', error);
-        setScaledroneStatus('error');
-      });
-
-      droneRef.current.on('close', (event) => {
-        console.log('Scaledrone connection closed:', event);
-        setScaledroneStatus('disconnected');
-      });
-
-    } catch (error) {
-      console.error('Failed to create Scaledrone connection:', error);
-      setScaledroneStatus('error');
-    }
-  }, [handleTextSelectionMessage]);
-
-  // Initialize Scaledrone connection
-  const initializeScaledrone = useCallback(() => {
-    try {
-      // Load Scaledrone script if not already loaded
-      if (typeof window.Scaledrone === 'undefined') {
-        const script = document.createElement('script');
-        script.src = 'https://cdn.scaledrone.com/scaledrone.min.js';
-        script.onload = () => {
-          console.log('Scaledrone script loaded');
-          createScaledroneConnection();
-        };
-        script.onerror = () => {
-          console.error('Failed to load Scaledrone script');
-          setScaledroneStatus('error');
-        };
-        document.head.appendChild(script);
-      } else {
-        createScaledroneConnection();
-      }
-    } catch (error) {
-      console.error('Failed to initialize Scaledrone:', error);
-      setScaledroneStatus('error');
-    }
-  }, [createScaledroneConnection]);
-
   // Load desktop sidebar width from localStorage (desktop only)
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -469,101 +377,6 @@ export default function Classroom() {
     };
   }, [isResizingSidebar, desktopSidebarWidth]);
 
-  // Load user preferences from database
-  const loadUserPreferences = useCallback(async () => {
-    if (preferencesLoaded) return;
-    
-    try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/user-preferences/classroom`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (response.ok) {
-        const preferences = await response.json();
-        
-        // Apply loaded preferences
-        if (preferences.isImmersiveMode !== undefined) {
-          // Enforce desktop-only immersive mode, ignore saved value on mobile
-          if (window.innerWidth < 1024) {
-            setIsImmersiveMode(false);
-          } else {
-            setIsImmersiveMode(preferences.isImmersiveMode);
-          }
-        }
-        
-        if (preferences.floatingWindowPosition) {
-          // Validate position is within current viewport
-          const x = Math.max(0, Math.min(preferences.floatingWindowPosition.x, window.innerWidth - (preferences.floatingWindowSize?.width || 600)));
-          const y = Math.max(0, Math.min(preferences.floatingWindowPosition.y, window.innerHeight - (preferences.floatingWindowSize?.height || 700)));
-          setFloatingWindowPosition({ x, y });
-        } else {
-          // Default position if none saved
-          setFloatingWindowPosition({ x: window.innerWidth - 616, y: 16 });
-        }
-        
-        if (preferences.floatingWindowSize) {
-          // Validate size constraints
-          const width = Math.max(400, Math.min(preferences.floatingWindowSize.width, window.innerWidth));
-          const height = Math.max(400, Math.min(preferences.floatingWindowSize.height, window.innerHeight));
-          setFloatingWindowSize({ width, height });
-        }
-      } else {
-        // Set default position if no preferences found
-        setFloatingWindowPosition({ x: window.innerWidth - 616, y: 16 });
-      }
-    } catch (error) {
-      console.error('Error loading user preferences:', error);
-      // Set default position on error
-      setFloatingWindowPosition({ x: window.innerWidth - 616, y: 16 });
-    } finally {
-      setPreferencesLoaded(true);
-    }
-  }, [preferencesLoaded]);
-
-  // Save user preferences to database (debounced)
-  const saveUserPreferences = useCallback(async () => {
-    try {
-      const preferences = {
-        isImmersiveMode,
-        floatingWindowPosition,
-        floatingWindowSize,
-        lastUpdated: new Date().toISOString()
-      };
-
-      await fetch(`${process.env.REACT_APP_API_URL}/api/user-preferences/classroom`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(preferences)
-      });
-    } catch (error) {
-      console.error('Error saving user preferences:', error);
-      // Fail silently - preferences are not critical
-    }
-  }, [isImmersiveMode, floatingWindowPosition, floatingWindowSize]);
-
-  // Debounced save function to avoid too many API calls
-  const debouncedSavePreferences = useCallback(() => {
-    if (!preferencesLoaded) return; // Don't save before preferences are loaded
-    
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-    }
-    
-    saveTimeoutRef.current = setTimeout(() => {
-      saveUserPreferences();
-    }, 1000); // Save after 1 second of inactivity
-  }, [saveUserPreferences, preferencesLoaded]);
-
-  // Load user preferences on component mount
-  useEffect(() => {
-    loadUserPreferences();
-  }, [loadUserPreferences]);
-
   // Handle window resize to exit immersive mode on mobile
   useEffect(() => {
     const handleResize = () => {
@@ -576,49 +389,28 @@ export default function Classroom() {
     return () => window.removeEventListener('resize', handleResize);
   }, [isImmersiveMode]);
 
-  // Also enforce on initial mount (in case immersive was saved on desktop and now opened on mobile)
+  // Listen for postMessages from the langhub-iframe
   useEffect(() => {
-    if (preferencesLoaded && window.innerWidth < 1024 && isImmersiveMode) {
-      setIsImmersiveMode(false);
-    }
-  }, [preferencesLoaded, isImmersiveMode]);
+    const handleMessage = (event) => {
+      // Only accept messages from the langhub iframe
+      if (event.source !== document.getElementById('langhub-iframe')?.contentWindow) {
+        return;
+      }
 
-  // Save preferences when immersive mode changes
-  useEffect(() => {
-    if (preferencesLoaded) {
-      debouncedSavePreferences();
-    }
-  }, [isImmersiveMode, debouncedSavePreferences, preferencesLoaded]);
+      if (event.data.type === 'widget_message' && !!event.data.params.msg) {
+        const message = event.data.params.msg;
+        handleTextSelectionMessage({data:message});
+      }
+    };
 
-  // Save preferences when floating window position changes
-  useEffect(() => {
-    if (preferencesLoaded) {
-      debouncedSavePreferences();
-    }
-  }, [floatingWindowPosition, debouncedSavePreferences, preferencesLoaded]);
-
-  // Save preferences when floating window size changes
-  useEffect(() => {
-    if (preferencesLoaded) {
-      debouncedSavePreferences();
-    }
-  }, [floatingWindowSize, debouncedSavePreferences, preferencesLoaded]);
-
-  // Initialize Scaledrone on component mount
-  useEffect(() => {
-    initializeScaledrone();
+    // Add event listener
+    window.addEventListener('message', handleMessage);
 
     // Cleanup function
     return () => {
-      if (droneRef.current) {
-        droneRef.current.close();
-      }
-      // Clean up save timeout
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-      }
+      window.removeEventListener('message', handleMessage);
     };
-  }, [initializeScaledrone]);
+  }, [handleTextSelectionMessage]);
 
   // Effect to scroll to the bottom of the chat history when new messages are added
   useEffect(() => {
@@ -663,10 +455,8 @@ export default function Classroom() {
       // Close mobile sidebar when entering immersive mode
       if (newMode) {
         setShowMobileSidebar(false);
-        // Only initialize position if preferences haven't been loaded yet
-        if (!preferencesLoaded) {
-          setFloatingWindowPosition({ x: window.innerWidth - floatingWindowSize.width - 16, y: 16 });
-        }
+        // Initialize position
+        setFloatingWindowPosition({ x: window.innerWidth - floatingWindowSize.width - 16, y: 16 });
         // Notify product tour that immersive window can be targeted
         setTimeout(() => {
           window.dispatchEvent(new Event('langhub:immersive-ready'));
@@ -775,6 +565,7 @@ export default function Classroom() {
             title="Main Content"
             className="w-full h-full border-none"
             data-tour="iframe"
+            id="langhub-iframe"
             style={{
               // Mobile-specific iframe improvements
               transform: 'scale(1)',
@@ -838,8 +629,6 @@ export default function Classroom() {
                 activeQuestionContext={activeQuestionContext}
                 setChatHistory={setChatHistory}
                 setIsTextbookIconBlinking={setIsTextbookIconBlinking}
-                scaledroneStatus={scaledroneStatus}
-                reconnectScaledrone={reconnectScaledrone}
             isVocabIconBlinking={isVocabIconBlinking}
             isTextbookIconBlinking={isTextbookIconBlinking}
                 isImmersiveMode={isImmersiveMode}
@@ -895,8 +684,6 @@ export default function Classroom() {
           activeQuestionContext={activeQuestionContext}
           setChatHistory={setChatHistory}
           setIsTextbookIconBlinking={setIsTextbookIconBlinking}
-          scaledroneStatus={scaledroneStatus}
-          reconnectScaledrone={reconnectScaledrone}
           isVocabIconBlinking={isVocabIconBlinking}
           isTextbookIconBlinking={isTextbookIconBlinking}
           isImmersiveMode={isImmersiveMode}
@@ -975,8 +762,6 @@ export default function Classroom() {
                 activeQuestionContext={activeQuestionContext}
                 setChatHistory={setChatHistory}
                 setIsTextbookIconBlinking={setIsTextbookIconBlinking}
-                scaledroneStatus={scaledroneStatus}
-                reconnectScaledrone={reconnectScaledrone}
                   isVocabIconBlinking={isVocabIconBlinking}
                   isTextbookIconBlinking={isTextbookIconBlinking}
                 isImmersiveMode={isImmersiveMode}
