@@ -4,9 +4,6 @@ import { Link } from 'react-router-dom';
 const TopBar = ({ 
   title, 
   subtitle, 
-  showConnectionStatus = false, 
-  connectionStatus = 'disconnected',
-  onReconnect = null,
   isVocabIconBlinking = false,
   isTextbookIconBlinking = false,
   showBackLink = false,
@@ -45,36 +42,6 @@ const TopBar = ({
               )}
               ✨ langhub
             </h2>
-            
-            {/* Connection Status - only shown on Classroom */}
-            {showConnectionStatus && (
-              <div className="flex items-center justify-center gap-1 lg:gap-2">
-                <div className={`inline-flex items-center p-1 rounded-full text-xs font-medium ${
-                  connectionStatus === 'connected' 
-                    ? 'bg-green-100 text-green-800' 
-                    : connectionStatus === 'error' 
-                    ? 'bg-red-100 text-red-800' 
-                    : 'bg-yellow-100 text-yellow-800'
-                }`}>
-                  <div className={`w-2 h-2 rounded-full ${
-                    connectionStatus === 'connected' 
-                      ? 'bg-green-500' 
-                      : connectionStatus === 'error' 
-                      ? 'bg-red-500' 
-                      : 'bg-yellow-500'
-                  }`}></div>
-                </div>
-                {(connectionStatus === 'error' || connectionStatus === 'disconnected') && onReconnect && (
-                  <button
-                    onClick={onReconnect}
-                    className="px-1 lg:px-2 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded transition duration-200 min-w-[24px] min-h-[24px] lg:min-w-0 lg:min-h-0"
-                    title="Reconnect to Scaledrone"
-                  >
-                    ↻
-                  </button>
-                )}
-              </div>
-            )}
           </div>
           
           {/* Title and subtitle if provided */}

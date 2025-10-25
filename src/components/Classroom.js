@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Portal from './Portal';
 import UnifiedSidebar from './UnifiedSidebar';
-import { processTextWithPrompt, checkPromptAPIAvailability } from '../utils/promptAPI';
+import { processTextWithPrompt, processQuestionWorkflow, checkPromptAPIAvailability } from '../utils/promptAPI';
 import { 
   getChatHistoryForText, 
   saveChatHistoryForText, 
@@ -150,11 +150,16 @@ export default function Classroom() {
           };
         }
 
-        // Use Prompt API instead of server request
-        const data = await processTextWithPrompt(message, requestBody.actionType, {
-          originalText: requestBody.originalText,
-          originalQuestion: requestBody.originalQuestion
-        });
+        // Use the new question workflow for question actions
+        let data;
+        if (requestBody.actionType === 'question') {
+          data = await processQuestionWorkflow(requestBody.originalText || message, 'Dutch');
+        } else {
+          data = await processTextWithPrompt(message, requestBody.actionType, {
+            originalText: requestBody.originalText,
+            originalQuestion: requestBody.originalQuestion
+          });
+        }
 
         setChatHistory(prev => [...prev, { text: data.response, sender: 'ai', actionType: data.actionType }]);
         

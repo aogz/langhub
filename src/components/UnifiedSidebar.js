@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import SelectedTextBlock from './SelectedTextBlock';
 import TopBar from './TopBar';
 import { useInteractiveText } from '../hooks/useInteractiveText';
-import { processTextWithPrompt, checkPromptAPIAvailability } from '../utils/promptAPI';
+import { processTextWithPrompt, processQuestionWorkflow, checkPromptAPIAvailability } from '../utils/promptAPI';
 
 const TextResponse = ({ text, onWordAdded, actionType, getCurrentSource }) => {
   const { textContainerRef, renderInteractiveContent, Popup } = useInteractiveText(onWordAdded, getCurrentSource);
@@ -146,8 +146,6 @@ const UnifiedSidebar = ({
           className={isImmersive ? `cursor-grab active:cursor-grabbing ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}` : ''}
         >
           <TopBar 
-            showConnectionStatus={true}
-            connectionStatus={scaledroneStatus}
             onReconnect={reconnectScaledrone}
             isVocabIconBlinking={isVocabIconBlinking}
             isTextbookIconBlinking={isTextbookIconBlinking}
@@ -312,8 +310,13 @@ const UnifiedSidebar = ({
                         const selectedText = selectedTexts[selectedTexts.length - 1].content;
                         
                         
-                        // Use Prompt API instead of server request
-                        const data = await processTextWithPrompt(selectedText, actionType);
+                        // Use the new question workflow for question actions
+                        let data;
+                        if (actionType === 'question') {
+                          data = await processQuestionWorkflow(selectedText, 'Dutch');
+                        } else {
+                          data = await processTextWithPrompt(selectedText, actionType);
+                        }
                         
                         // Add the response to chat history for all action types
                         setChatHistory(prev => [...prev, { 

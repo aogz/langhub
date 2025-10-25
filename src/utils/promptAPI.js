@@ -47,7 +47,25 @@ const createLanguageModelSession = async () => {
   }
 };
 
-// Create prompt for generating questions
+// Create prompt for formulating a question about selected text
+const createQuestionFormulationPrompt = (text) => {
+  return `You are a helpful language learning assistant. The user has selected this text: "${text}"
+
+Your task is to formulate ONE simple, concise question about this text that would help the user learn the language better.
+
+Requirements:
+- Generate exactly ONE question
+- Make it simple and concise
+- Focus on language learning aspects (grammar, vocabulary, meaning, etc.)
+- The question should be answerable by reading and analyzing the text
+- Do not include any explanations or additional information
+- Just return the question itself
+`;
+};
+
+
+
+// Create prompt for generating questions (legacy - for follow-ups)
 const createQuestionPrompt = (text, context) => {
   const { originalText, originalQuestion } = context;
   
@@ -97,6 +115,9 @@ export const processTextWithStreamingPrompt = async (text, actionType, context =
       case 'question':
         prompt = createQuestionPrompt(text, context);
         break;
+      case 'question-formulation':
+        prompt = createQuestionFormulationPrompt(text);
+        break;
       case 'answer':
         prompt = createAnswerPrompt(text, context);
         break;
@@ -138,6 +159,66 @@ export const processTextWithStreamingPrompt = async (text, actionType, context =
   }
 };
 
+// Process question formulation and translation workflow
+export const processQuestionWorkflow = async (selectedText, targetLanguage = 'Dutch') => {
+  try {
+    // Step 1: Formulate a question about the selected text
+    console.log('Step 1: Formulating question about text:', selectedText);
+    const formulationResult = await processTextWithPrompt(selectedText, 'question-formulation');
+    
+    if (!formulationResult.success) {
+      throw new Error(formulationResult.error || 'Failed to formulate question');
+    }
+    
+    const formulatedQuestion = formulationResult.response.trim();
+    console.log('Formulated question:', formulatedQuestion);
+    
+    // Step 2: Translate the question using Gemini Translation API
+    console.log('Step 2: Translating question to', targetLanguage);
+    const translatedQuestion = await translateText(formulatedQuestion, targetLanguage);
+    console.log('Translated question:', translatedQuestion);
+    
+    return {
+      success: true,
+      response: translatedQuestion,
+      originalQuestion: formulatedQuestion,
+      actionType: 'question'
+    };
+    
+  } catch (error) {
+    console.error('Error in question workflow:', error);
+    return {
+      success: false,
+      error: error.message,
+      response: null
+    };
+  }
+};
+
+// Translate text using the same translation API used for word translations
+const translateText = async (text, targetLanguage) => {
+  try {
+    // Use the same translation API used for word translations
+    const TranslatorAPI = typeof window !== 'undefined' ? window.Translator : undefined;
+    
+    if (!TranslatorAPI) {
+      throw new Error('Translation API not available');
+    }
+
+    // Create translator instance
+    const translator = await TranslatorAPI.create();
+    
+    // Translate the text
+    const translated = await translator.translate(text);
+    
+    return translated;
+  } catch (error) {
+    console.error('Translation error:', error);
+    // Fallback: return original text if translation fails
+    return text;
+  }
+};
+
 // Process text with Prompt API (main function)
 export const processTextWithPrompt = async (text, actionType = 'question', context = {}) => {
   let session = null;
@@ -150,6 +231,9 @@ export const processTextWithPrompt = async (text, actionType = 'question', conte
     switch (actionType) {
       case 'question':
         prompt = createQuestionPrompt(text, context);
+        break;
+      case 'question-formulation':
+        prompt = createQuestionFormulationPrompt(text);
         break;
       case 'answer':
         prompt = createAnswerPrompt(text, context);
