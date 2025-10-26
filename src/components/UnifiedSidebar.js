@@ -29,13 +29,11 @@ const TextResponse = ({ text, onWordAdded, actionType, getCurrentSource }) => {
 };
 
 const AiChatMessage = ({ text, onWordAdded, actionType, originalText, onGenerateExercises, getCurrentSource }) => {
-  // Use simple text view for errors and feedback
-  if (actionType === 'error' || actionType === 'feedback') {
+  // Use simple text view for errors only
+  if (actionType === 'error') {
     return (
       <div className={`rounded-xl border shadow-inner overflow-hidden p-3 lg:p-4 text-xs lg:text-sm ${
-        actionType === 'error' 
-          ? 'bg-red-900/20 border-red-600/30 text-red-100' 
-          : 'bg-blue-900/20 border-blue-600/30 text-blue-100'
+        'bg-red-900/20 border-red-600/30 text-red-100'
       }`}>
         <ReactMarkdown
           components={{
@@ -58,7 +56,7 @@ const AiChatMessage = ({ text, onWordAdded, actionType, originalText, onGenerate
     );
   }
   
-  // Use text widget for questions and other conversational responses
+  // Use interactive text widget for feedback, questions and other conversational responses
   return <TextResponse text={text} onWordAdded={onWordAdded} actionType={actionType} getCurrentSource={getCurrentSource} />;
 };
 
@@ -313,7 +311,7 @@ const UnifiedSidebar = ({
                         // Use the new question workflow for question actions
                         let data;
                         if (actionType === 'question') {
-                          data = await processQuestionWorkflow(selectedText, 'Dutch');
+                          data = await processQuestionWorkflow(selectedText);
                         } else {
                           data = await processTextWithPrompt(selectedText, actionType);
                         }

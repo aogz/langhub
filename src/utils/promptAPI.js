@@ -63,6 +63,33 @@ Requirements:
 `;
 };
 
+// Create prompt for evaluating user answers and generating follow-up questions
+const createAnswerEvaluationPrompt = (originalText, question, userAnswer, chatHistory) => {
+  const historyContext = chatHistory.map(msg => `${msg.sender}: ${msg.text}`).join('\n');
+  
+  return `You are a friendly language teacher having a conversation with a student. Respond naturally as if you're talking to them directly.
+
+ORIGINAL TEXT: "${originalText}"
+QUESTION ASKED: "${question}"
+STUDENT'S ANSWER: "${userAnswer}"
+
+CONVERSATION HISTORY:
+${historyContext}
+
+Write a natural, conversational response that:
+1. Acknowledges their answer in a friendly way
+2. Gives brief, encouraging feedback on their language use
+3. Asks a natural follow-up question that builds on the conversation
+4. If there's nothing meaningful to ask, naturally suggest moving to the next piece of text
+
+Requirements:
+- Write as one natural message (not structured sections)
+- Be conversational and friendly
+- Don't repeat questions from the conversation history
+- Keep it brief and natural
+- Sound like a real teacher talking to a student`;
+};
+
 
 
 // Create prompt for generating questions (legacy - for follow-ups)
@@ -118,6 +145,9 @@ export const processTextWithStreamingPrompt = async (text, actionType, context =
       case 'question-formulation':
         prompt = createQuestionFormulationPrompt(text);
         break;
+      case 'answer-evaluation':
+        prompt = createAnswerEvaluationPrompt(text, context.question, context.userAnswer, context.chatHistory);
+        break;
       case 'answer':
         prompt = createAnswerPrompt(text, context);
         break;
@@ -159,8 +189,64 @@ export const processTextWithStreamingPrompt = async (text, actionType, context =
   }
 };
 
+// Process answer evaluation workflow
+export const processAnswerEvaluationWorkflow = async (originalText, question, userAnswer, chatHistory, targetLanguage = null) => {
+  try {
+    // Step 1: Evaluate the user's answer and generate follow-up
+    console.log('Step 1: Evaluating answer for text:', originalText);
+    const evaluationResult = await processTextWithPrompt(originalText, 'answer-evaluation', {
+      question: question,
+      userAnswer: userAnswer,
+      chatHistory: chatHistory
+    });
+    
+    if (!evaluationResult.success) {
+      throw new Error(evaluationResult.error || 'Failed to evaluate answer');
+    }
+    
+    const evaluation = evaluationResult.response.trim();
+    console.log('Evaluation result:', evaluation);
+    
+    // Step 2: Detect language if not provided and translate
+    let translatedEvaluation = evaluation;
+    if (targetLanguage) {
+      console.log('Step 2: Translating evaluation to', targetLanguage);
+      translatedEvaluation = await translateText(evaluation, targetLanguage);
+      console.log('Translated evaluation:', translatedEvaluation);
+    } else {
+      // Try to detect language from original text
+      try {
+        const { detectLanguage } = await import('./languageDetection');
+        const languageInfo = await detectLanguage(originalText);
+        if (languageInfo && languageInfo.detectedLanguage) {
+          console.log('Step 2: Detected language:', languageInfo.detectedLanguage, 'Translating evaluation...');
+          translatedEvaluation = await translateText(evaluation, languageInfo.detectedLanguage);
+          console.log('Translated evaluation:', translatedEvaluation);
+        }
+      } catch (detectionError) {
+        console.warn('Language detection failed, using original evaluation:', detectionError);
+      }
+    }
+    
+    return {
+      success: true,
+      response: translatedEvaluation,
+      originalEvaluation: evaluation,
+      actionType: 'feedback'
+    };
+    
+  } catch (error) {
+    console.error('Error in answer evaluation workflow:', error);
+    return {
+      success: false,
+      error: error.message,
+      response: null
+    };
+  }
+};
+
 // Process question formulation and translation workflow
-export const processQuestionWorkflow = async (selectedText, targetLanguage = 'Dutch') => {
+export const processQuestionWorkflow = async (selectedText, targetLanguage = null) => {
   try {
     // Step 1: Formulate a question about the selected text
     console.log('Step 1: Formulating question about text:', selectedText);
@@ -173,10 +259,26 @@ export const processQuestionWorkflow = async (selectedText, targetLanguage = 'Du
     const formulatedQuestion = formulationResult.response.trim();
     console.log('Formulated question:', formulatedQuestion);
     
-    // Step 2: Translate the question using Gemini Translation API
-    console.log('Step 2: Translating question to', targetLanguage);
-    const translatedQuestion = await translateText(formulatedQuestion, targetLanguage);
-    console.log('Translated question:', translatedQuestion);
+    // Step 2: Detect language if not provided and translate
+    let translatedQuestion = formulatedQuestion;
+    if (targetLanguage) {
+      console.log('Step 2: Translating question to', targetLanguage);
+      translatedQuestion = await translateText(formulatedQuestion, targetLanguage);
+      console.log('Translated question:', translatedQuestion);
+    } else {
+      // Try to detect language from selected text
+      try {
+        const { detectLanguage } = await import('./languageDetection');
+        const languageInfo = await detectLanguage(selectedText);
+        if (languageInfo && languageInfo.detectedLanguage) {
+          console.log('Step 2: Detected language:', languageInfo.detectedLanguage, 'Translating question...');
+          translatedQuestion = await translateText(formulatedQuestion, languageInfo.detectedLanguage);
+          console.log('Translated question:', translatedQuestion);
+        }
+      } catch (detectionError) {
+        console.warn('Language detection failed, using original question:', detectionError);
+      }
+    }
     
     return {
       success: true,
@@ -205,8 +307,12 @@ const translateText = async (text, targetLanguage) => {
       throw new Error('Translation API not available');
     }
 
-    // Create translator instance
-    const translator = await TranslatorAPI.create();
+    // Create translator instance with source and target languages
+    const sourceLanguage = targetLanguage !== 'en' ? 'en' : 'nl';
+    const translator = await TranslatorAPI.create({
+      sourceLanguage,
+      targetLanguage,
+    });
     
     // Translate the text
     const translated = await translator.translate(text);
@@ -234,6 +340,9 @@ export const processTextWithPrompt = async (text, actionType = 'question', conte
         break;
       case 'question-formulation':
         prompt = createQuestionFormulationPrompt(text);
+        break;
+      case 'answer-evaluation':
+        prompt = createAnswerEvaluationPrompt(text, context.question, context.userAnswer, context.chatHistory);
         break;
       case 'answer':
         prompt = createAnswerPrompt(text, context);

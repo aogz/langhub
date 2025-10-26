@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Portal from './Portal';
 import UnifiedSidebar from './UnifiedSidebar';
-import { processTextWithPrompt, processQuestionWorkflow, checkPromptAPIAvailability } from '../utils/promptAPI';
+import { processTextWithPrompt, processQuestionWorkflow, processAnswerEvaluationWorkflow, checkPromptAPIAvailability } from '../utils/promptAPI';
 import { 
   getChatHistoryForText, 
   saveChatHistoryForText, 
@@ -128,6 +128,15 @@ export default function Classroom() {
     // Add user message to chat history
     setChatHistory(prev => [...prev, { text: message, sender }]);
     setCurrentMessage(''); // Clear input field
+    
+    // Immediately scroll to bottom when user sends a message
+    if (sender === 'user' && chatMessagesRef.current) {
+      requestAnimationFrame(() => {
+        if (chatMessagesRef.current) {
+          chatMessagesRef.current.scrollTop = chatMessagesRef.current.scrollHeight;
+        }
+      });
+    }
 
     // If it's a user message, get AI response from backend
     if (sender === 'user') {
@@ -150,10 +159,18 @@ export default function Classroom() {
           };
         }
 
-        // Use the new question workflow for question actions
+        // Use the appropriate workflow based on action type
         let data;
         if (requestBody.actionType === 'question') {
-          data = await processQuestionWorkflow(requestBody.originalText || message, 'Dutch');
+          data = await processQuestionWorkflow(requestBody.originalText || message);
+        } else if (requestBody.actionType === 'answer') {
+          // Use answer evaluation workflow for answering questions
+          data = await processAnswerEvaluationWorkflow(
+            requestBody.originalText,
+            requestBody.originalQuestion,
+            message,
+            chatHistory
+          );
         } else {
           data = await processTextWithPrompt(message, requestBody.actionType, {
             originalText: requestBody.originalText,
@@ -163,14 +180,15 @@ export default function Classroom() {
 
         setChatHistory(prev => [...prev, { text: data.response, sender: 'ai', actionType: data.actionType }]);
         
-        // If the AI's response is a question, set it as the new active question.
+        // Handle different response types
         if (data.actionType === 'question') {
+          // Set up new question context
           setActiveQuestionContext({
             originalText: isAnsweringQuestion ? activeQuestionContext.originalText : message,
             question: data.response,
           });
         } else {
-          // If it's just feedback, clear the question context.
+          // Clear question context for other response types
           setActiveQuestionContext({ originalText: null, question: null });
         }
 
@@ -196,7 +214,7 @@ export default function Classroom() {
         setLoadingAction(null);
       }
     }
-  }, [activeQuestionContext]);
+  }, [activeQuestionContext, chatHistory]);
 
   // --- Speech Recognition Setup ---
   useEffect(() => {
@@ -420,14 +438,24 @@ export default function Classroom() {
   // Effect to scroll to the bottom of the chat history when new messages are added
   useEffect(() => {
     if (chatMessagesRef.current) {
-      chatMessagesRef.current.scrollTop = chatMessagesRef.current.scrollHeight;
+      // Use requestAnimationFrame to ensure DOM has updated before scrolling
+      requestAnimationFrame(() => {
+        if (chatMessagesRef.current) {
+          chatMessagesRef.current.scrollTop = chatMessagesRef.current.scrollHeight;
+        }
+      });
     }
   }, [chatHistory]);
 
   // Effect to scroll to the bottom of selected texts when new selections are added
   useEffect(() => {
     if (selectedTextsRef.current) {
-      selectedTextsRef.current.scrollTop = selectedTextsRef.current.scrollHeight;
+      // Use requestAnimationFrame to ensure DOM has updated before scrolling
+      requestAnimationFrame(() => {
+        if (selectedTextsRef.current) {
+          selectedTextsRef.current.scrollTop = selectedTextsRef.current.scrollHeight;
+        }
+      });
     }
   }, [selectedTexts]);
 
