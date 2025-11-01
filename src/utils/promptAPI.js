@@ -53,7 +53,7 @@ const createLanguageModelSession = async (options = {}) => {
 const createQuestionFormulationPrompt = (text) => {
   return `You are a helpful language learning assistant. The user has selected this text: "${text}"
 
-Your task is to formulate ONE simple, concise question about this text that would help the user learn the language better.
+Your task is to formulate ONE concise question about this content of this text that would help the user learn the language better.
 
 Requirements:
 - Generate exactly ONE question
@@ -62,6 +62,13 @@ Requirements:
 - The question should be answerable by reading and analyzing the text
 - Do not include any explanations or additional information
 - Just return the question itself
+
+EXAMPLE QUESTION:
+"What is the main message of this text?"
+"Why did the mayor of Amsterdam resign?"
+"What is the reason for the increase in crime in the city?"
+"How many people were involed in the protest?"
+"What is the main reason of the protest?"
 `;
 };
 
