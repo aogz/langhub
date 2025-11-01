@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useUserSettings } from '../contexts/UserSettingsContext';
+import { useTranslation } from '../hooks/useTranslation';
 
 const TopBar = ({ 
   title, 
@@ -14,6 +15,7 @@ const TopBar = ({
   isImmersiveMode = false,
   onToggleImmersiveMode = null
 }) => {
+  const { t } = useTranslation();
   const [showTranslatePopover, setShowTranslatePopover] = useState(false);
   const { settings } = useUserSettings();
   const nativeLanguage = settings?.nativeLanguage || 'en';
@@ -83,7 +85,7 @@ const TopBar = ({
       try {
         const TranslatorAPI = typeof window !== 'undefined' ? window.Translator : undefined;
         if (!TranslatorAPI || !isChrome138Plus()) {
-          setTranslatedText('Translation requires Chrome 138+ with Translator API support.');
+          setTranslatedText(t('translationRequiresChrome'));
           setIsTranslating(false);
           return;
         }
@@ -94,17 +96,18 @@ const TopBar = ({
         });
 
         const translated = await translator.translate(translationText);
-        setTranslatedText(translated || 'Translation not available');
+        setTranslatedText(translated || t('translationNotAvailable'));
       } catch (error) {
         console.error('Translation error:', error);
-        setTranslatedText(`Translation failed: ${error.message}`);
+        setTranslatedText(`${t('translationFailed')}: ${error.message}`);
       } finally {
         setIsTranslating(false);
       }
     }, 500); // 500ms debounce
 
     return () => clearTimeout(timeoutId);
-  }, [translationText, sourceLanguage, targetLanguage, nativeLanguage]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [translationText, sourceLanguage, targetLanguage, nativeLanguage]); // t is stable from useTranslation hook and nativeLanguage is in deps
   
   // Update target language when native language changes
   useEffect(() => {
@@ -121,7 +124,7 @@ const TopBar = ({
       const copyButton = document.querySelector('[data-copy-button]');
       if (copyButton) {
         const originalText = copyButton.innerHTML;
-        copyButton.innerHTML = '✓ Copied!';
+        copyButton.innerHTML = `✓ ${t('copied')}`;
         copyButton.classList.add('bg-green-600');
         setTimeout(() => {
           copyButton.innerHTML = originalText;
@@ -177,7 +180,7 @@ const TopBar = ({
                   <svg className="w-4 h-4 transform transition-transform group-hover:-translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                   </svg>
-                  {backLinkText}
+                  {backLinkText || t('backToClassroom')}
                 </Link>
                 <span className="text-gray-600 text-sm">|</span>
               </>
@@ -297,7 +300,7 @@ const TopBar = ({
                   data-translate-button
                   onClick={() => setShowTranslatePopover(!showTranslatePopover)}
                   className="flex items-center hover:bg-gray-800 p-1 lg:p-2 rounded-full transition-colors min-w-[32px] min-h-[32px] lg:min-w-0 lg:min-h-0 text-gray-400 hover:text-white"
-                  title="Translate"
+                  title={t('translate')}
                 >
                   <svg className="w-5 h-5 lg:w-6 lg:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.083 9.5c.319-.9.652-1.784 1.001-2.649M15 19a18.022 18.022 0 003.917-2.5c.319-.9.652-1.784 1.001-2.649M9 17H3m6-10H3m9 7h6m-6-7h6m-6 3h3" />
@@ -313,7 +316,7 @@ const TopBar = ({
                     <div className="space-y-4">
                       {/* Header */}
                       <div className="flex items-center justify-between">
-                        <h3 className="text-lg font-semibold text-white">Translate</h3>
+                        <h3 className="text-lg font-semibold text-white">{t('translateTitle')}</h3>
                         <button
                           onClick={() => setShowTranslatePopover(false)}
                           className="text-gray-400 hover:text-white"
@@ -328,7 +331,7 @@ const TopBar = ({
                       <div className="flex items-center gap-2">
                         {/* Source Language */}
                         <div className="flex-1">
-                          <label className="block text-xs text-gray-400 mb-1">From</label>
+                          <label className="block text-xs text-gray-400 mb-1">{t('translateFrom')}</label>
                           <select
                             value={sourceLanguage}
                             onChange={(e) => {
@@ -358,7 +361,7 @@ const TopBar = ({
 
                         {/* Target Language */}
                         <div className="flex-1">
-                          <label className="block text-xs text-gray-400 mb-1">To</label>
+                          <label className="block text-xs text-gray-400 mb-1">{t('translateTo')}</label>
                           <select
                             value={targetLanguage}
                             onChange={(e) => {
@@ -378,11 +381,11 @@ const TopBar = ({
 
                       {/* Input Field */}
                       <div>
-                        <label className="block text-xs text-gray-400 mb-1">Text to translate</label>
+                        <label className="block text-xs text-gray-400 mb-1">{t('textToTranslate')}</label>
                         <textarea
                           value={translationText}
                           onChange={(e) => setTranslationText(e.target.value)}
-                          placeholder="Enter text to translate..."
+                          placeholder={t('enterTextToTranslate')}
                           className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                           rows={4}
                         />
@@ -429,7 +432,7 @@ const TopBar = ({
               <Link
                 to="/settings"
                 className="flex items-center hover:bg-gray-800 p-1 lg:p-2 rounded-full transition-colors min-w-[32px] min-h-[32px] lg:min-w-0 lg:min-h-0 text-gray-400 hover:text-white"
-                title="Settings"
+                title={t('settings')}
               >
                 <svg className="w-5 h-5 lg:w-6 lg:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />

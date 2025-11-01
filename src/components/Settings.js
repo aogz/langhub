@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { useUserSettings } from '../contexts/UserSettingsContext';
 import TopBar from './TopBar';
+import { useTranslation } from '../hooks/useTranslation';
 
 const Settings = () => {
+  const { t } = useTranslation();
   const { settings, isLoading, updateSettings } = useUserSettings();
   
   // Local state for form
@@ -51,7 +53,7 @@ const Settings = () => {
       <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 flex items-center justify-center">
         <div className="flex items-center space-x-2 text-white">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400"></div>
-          <span>Loading settings...</span>
+          <span>{t('loadingSettings')}</span>
         </div>
       </div>
     );
@@ -63,8 +65,8 @@ const Settings = () => {
       <nav className="bg-gray-900/50 backdrop-blur-sm border-b border-gray-700 sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <TopBar 
-            title="Settings"
-            subtitle="Customize your learning experience"
+            title={t('settingsTitle')}
+            subtitle={t('settingsSubtitle')}
             showBackLink={true}
           />
         </div>
@@ -78,8 +80,8 @@ const Settings = () => {
               
               {/* Native Language */}
               <div>
-                <h3 className="text-xl font-semibold text-white mb-4">Your Native Language</h3>
-                <p className="text-gray-400 mb-4">The language you're most comfortable with</p>
+                <h3 className="text-xl font-semibold text-white mb-4">{t('yourNativeLanguage')}</h3>
+                <p className="text-gray-400 mb-4">{t('nativeLanguageDescription')}</p>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {nativeLanguages.map((lang) => (
                     <button
@@ -107,7 +109,7 @@ const Settings = () => {
                         <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                           <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                         </svg>
-                        <span>Settings saved successfully!</span>
+                        <span>{t('settingsSavedSuccessfully')}</span>
                       </div>
                     )}
                     {saveStatus === 'error' && (
@@ -115,7 +117,7 @@ const Settings = () => {
                         <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                           <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                         </svg>
-                        <span>Error saving settings. Please try again.</span>
+                        <span>{t('errorSavingSettings')}</span>
                       </div>
                     )}
                   </div>
@@ -127,14 +129,14 @@ const Settings = () => {
                     {isSaving ? (
                       <>
                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                        Saving...
+                        {t('saving')}...
                       </>
                     ) : (
                       <>
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                         </svg>
-                        Save Settings
+                        {t('saveSettings')}
                       </>
                     )}
                   </button>

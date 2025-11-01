@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useInteractiveText } from '../hooks/useInteractiveText';
 import { detectLanguage, isLanguageDetectorAvailable, isChrome138Plus } from '../utils/languageDetection';
+import { useTranslation } from '../hooks/useTranslation';
 
 const ActionButton = ({ onClick, icon, label, isLoading, isDisabled }) => (
   <button
@@ -26,6 +27,7 @@ const ActionButton = ({ onClick, icon, label, isLoading, isDisabled }) => (
 );
 
 export default function SelectedTextBlock({ content, source, isCollapsed, onToggleCollapse, onAction, onWordAdded, loadingAction, hasHistory, onShowHistory, type, imageData, imageUrl, alt }) {
+  const { t } = useTranslation();
   // Language detection state
   const [languageInfo, setLanguageInfo] = useState(null);
   const [isDetectingLanguage, setIsDetectingLanguage] = useState(false);
@@ -127,7 +129,7 @@ export default function SelectedTextBlock({ content, source, isCollapsed, onTogg
             </div>
           ) : (
             <span className="text-xs font-medium text-gray-300 group-hover:text-white transition-colors">
-              Selected Text
+              {t('selectedText')}
             </span>
           )}
         </div>
@@ -175,7 +177,7 @@ export default function SelectedTextBlock({ content, source, isCollapsed, onTogg
             <ActionButton 
               onClick={() => onAction('question')} 
               icon="?" 
-              label={isImage ? "Ask about this image" : "Ask me a question"} 
+              label={isImage ? t('askAboutThisImage') : t('askMeAQuestion')} 
               isLoading={loadingAction === 'question'}
               isDisabled={!!loadingAction}
             />
@@ -183,7 +185,7 @@ export default function SelectedTextBlock({ content, source, isCollapsed, onTogg
               <ActionButton 
                 onClick={() => onAction('explain-grammar')} 
                 icon="📚" 
-                label="Explain grammar" 
+                label={t('explainGrammar')} 
                 isLoading={loadingAction === 'explain-grammar'}
                 isDisabled={!!loadingAction}
               />

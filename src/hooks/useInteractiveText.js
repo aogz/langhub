@@ -166,7 +166,7 @@ export const useInteractiveText = (onWordAdded, getCurrentSource) => {
     } finally {
       setIsTranslating(false);
     }
-  }, [calculatePosition]);
+  }, [calculatePosition, nativeLanguage]);
   
   const handleAddToVocab = useCallback(async (word) => {
     if (!word?.trim() || isAddingToVocab) return;
@@ -202,7 +202,7 @@ export const useInteractiveText = (onWordAdded, getCurrentSource) => {
     } finally {
       setIsAddingToVocab(false);
     }
-  }, [isAddingToVocab, translationPopup, onWordAdded, getCurrentSource]);
+  }, [isAddingToVocab, translationPopup, onWordAdded, getCurrentSource, nativeLanguage]);
 
 
   const handleWordMouseDown = useCallback((event, word, wordIndex) => {

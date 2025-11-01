@@ -355,7 +355,7 @@ export default function Classroom() {
     } finally {
       setLoadingAction(null);
     }
-  }, [activeQuestionContext, selectedTexts, chatHistory, sendMessage, chatMessagesRef]);
+  }, [activeQuestionContext, selectedTexts, sendMessage, chatMessagesRef]);
 
   // Stop recording and send audio to model
   const stopRecordingAndSend = useCallback(async (transcript = '') => {

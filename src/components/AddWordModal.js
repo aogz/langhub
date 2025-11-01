@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { useUserSettings } from '../contexts/UserSettingsContext';
+import { useTranslation } from '../hooks/useTranslation';
 
 const AddWordModal = ({ onAdd, isAdding, error, onClose }) => {
+  const { t } = useTranslation();
   const { settings } = useUserSettings();
   const nativeLanguage = settings?.nativeLanguage || 'en';
   const [word, setWord] = useState('');
@@ -79,12 +81,12 @@ const AddWordModal = ({ onAdd, isAdding, error, onClose }) => {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
           </svg>
         </button>
-        <h3 className="text-xl font-bold text-white mb-4">Add a New Word</h3>
+        <h3 className="text-xl font-bold text-white mb-4">{t('addNewWord')}</h3>
         <form onSubmit={handleSubmit}>
           <div className="space-y-4">
             <div>
               <label htmlFor="word" className="block text-sm font-medium text-gray-300 mb-1">
-                Word
+                {t('word')}
               </label>
               <div className="flex items-center gap-2">
                 <input
@@ -93,7 +95,7 @@ const AddWordModal = ({ onAdd, isAdding, error, onClose }) => {
                   value={word}
                   onChange={(e) => setWord(e.target.value)}
                   className="w-full p-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                  placeholder="Enter the word"
+                  placeholder={t('enterWord')}
                   required
                 />
                 <button
@@ -101,7 +103,7 @@ const AddWordModal = ({ onAdd, isAdding, error, onClose }) => {
                   onClick={handleAutoTranslate}
                   disabled={isTranslating || !word.trim()}
                   className="flex-shrink-0 px-3 py-2 text-sm rounded-md bg-indigo-600 hover:bg-indigo-700 text-white transition-colors disabled:bg-gray-500 disabled:cursor-not-allowed"
-                  title="Auto-translate to English"
+                  title={t('autoTranslateToEnglish')}
                 >
                   {isTranslating ? (
                     <div className="w-4 h-4 border-2 border-transparent border-t-white rounded-full animate-spin"></div>
@@ -113,7 +115,7 @@ const AddWordModal = ({ onAdd, isAdding, error, onClose }) => {
             </div>
             <div>
               <label htmlFor="translation" className="block text-sm font-medium text-gray-300 mb-1">
-                Translation
+                {t('translation')}
               </label>
               <input
                 type="text"
@@ -121,13 +123,13 @@ const AddWordModal = ({ onAdd, isAdding, error, onClose }) => {
                 value={translation}
                 onChange={(e) => setTranslation(e.target.value)}
                 className="w-full p-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                placeholder="Enter the translation"
+                placeholder={t('enterTranslation')}
                 required
               />
             </div>
             <div>
               <label htmlFor="language" className="block text-sm font-medium text-gray-300 mb-1">
-                Language Code
+                {t('languageCode')}
               </label>
               <input
                 type="text"
@@ -135,7 +137,7 @@ const AddWordModal = ({ onAdd, isAdding, error, onClose }) => {
                 value={language}
                 onChange={(e) => setLanguage(e.target.value)}
                 className="w-full p-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                placeholder="e.g., nl, es, fr"
+                placeholder={t('languageCodePlaceholder')}
                 required
               />
             </div>
@@ -147,14 +149,14 @@ const AddWordModal = ({ onAdd, isAdding, error, onClose }) => {
               onClick={onClose}
               className="px-4 py-2 rounded-md text-gray-300 bg-gray-600 hover:bg-gray-500 transition-colors"
             >
-              Cancel
+              {t('cancel')}
             </button>
             <button
               type="submit"
               disabled={isAdding}
               className="px-4 py-2 rounded-md text-white bg-blue-600 hover:bg-blue-700 transition-colors disabled:bg-gray-500 disabled:cursor-not-allowed"
             >
-              {isAdding ? 'Adding...' : 'Add Word'}
+              {isAdding ? t('adding') : t('addWord')}
             </button>
           </div>
         </form>

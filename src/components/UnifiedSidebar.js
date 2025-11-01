@@ -5,6 +5,7 @@ import TopBar from './TopBar';
 import { useInteractiveText } from '../hooks/useInteractiveText';
 import { processTextWithPrompt, processQuestionWorkflow, processImageQuestionWorkflow, checkPromptAPIAvailability } from '../utils/promptAPI';
 import { useUserSettings } from '../contexts/UserSettingsContext';
+import { useTranslation } from '../hooks/useTranslation';
 
 const TextResponse = ({ text, onWordAdded, actionType, getCurrentSource }) => {
   const { textContainerRef, renderInteractiveContent, Popup } = useInteractiveText(onWordAdded, getCurrentSource);
@@ -107,6 +108,7 @@ const UnifiedSidebar = ({
   switchToChatSession,
   currentTextId
 }) => {
+  const { t } = useTranslation();
   const { settings } = useUserSettings();
   const nativeLanguage = settings?.nativeLanguage || 'en';
   const isDesktop = mode === 'desktop';
@@ -162,14 +164,14 @@ const UnifiedSidebar = ({
             <div className="flex items-center justify-center h-full p-4 lg:p-8">
               <div className="text-center text-gray-500">
                 <div className="text-4xl lg:text-6xl mb-4">{isMobile ? '💬' : '⬅️'}</div>
-                <p className="text-base lg:text-lg font-medium mb-2">Select text {isMobile ? 'to get started!' : 'from the page to get started!'}</p>
-                <p className="text-xs lg:text-sm text-gray-600">Open any article, blog post, or news page in the main window.</p>
+                <p className="text-base lg:text-lg font-medium mb-2">{isMobile ? t('selectTextToGetStarted') : t('selectTextFromPage')}</p>
+                <p className="text-xs lg:text-sm text-gray-600">{t('openAnyArticle')}</p>
                 <div className="mt-3 text-left max-w-md mx-auto">
                   <ul className="text-xs lg:text-sm text-gray-600 space-y-1 list-disc list-inside">
-                    <li>Highlight any text to translate it and save words</li>
-                    <li>Or click on a paragraph to send it here for questions</li>
+                    <li>{t('highlightText')}</li>
+                    <li>{t('clickParagraph')}</li>
                   </ul>
-                  <p className="text-xs lg:text-sm text-gray-600 mt-3">Then use <span className="text-gray-400">Ask</span> to get explanations and practice.</p>
+                  <p className="text-xs lg:text-sm text-gray-600 mt-3">{t('useAskToGetExplanations')}</p>
                 </div>
               </div>
             </div>
@@ -304,7 +306,7 @@ const UnifiedSidebar = ({
                         if (selectedTexts.length === 0) {
                           console.error('No selected texts available');
                           setChatHistory(prev => [...prev, { 
-                            text: 'No text selected. Please select some text first.', 
+                            text: t('noTextSelected'), 
                             sender: 'ai', 
                             actionType: 'error' 
                           }]);
@@ -331,7 +333,7 @@ const UnifiedSidebar = ({
                         } else {
                           if (isImage) {
                             setChatHistory(prev => [...prev, { 
-                              text: 'Image questions only support the "Ask about this image" action.', 
+                              text: t('imageQuestionsOnly'), 
                               sender: 'ai', 
                               actionType: 'error' 
                             }]);
@@ -364,7 +366,7 @@ const UnifiedSidebar = ({
                         const availabilityCheck = checkPromptAPIAvailability();
                         if (!availabilityCheck.isAvailable) {
                           setChatHistory(prev => [...prev, { 
-                            text: `AI features require Chrome 138+ with Prompt API support. ${availabilityCheck.error || 'Please update your browser.'}`, 
+                            text: `${t('aiFeaturesRequireChrome')} ${availabilityCheck.error || t('pleaseUpdateBrowser')}`, 
                             sender: 'ai', 
                             actionType: 'error' 
                           }]);
@@ -438,7 +440,7 @@ const UnifiedSidebar = ({
                       onKeyPress={(e) => {
                         if (e.key === 'Enter') sendMessage(currentMessage);
                       }}
-                      placeholder="Type your message..."
+                      placeholder={t('typeMessage')}
                       className={`flex-grow p-2 ${isDesktop ? 'lg:p-2' : ''} rounded-full bg-gray-800 border border-gray-600 text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm ${isDesktop ? 'lg:text-base' : ''}`}
                       disabled={!!loadingAction}
                       autoComplete="off"
