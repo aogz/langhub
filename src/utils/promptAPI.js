@@ -365,13 +365,13 @@ Requirements:
       
       const formulatedQuestion = responseText.trim();
       
-      // Step 2: Translate question if target language is provided
+      // Step 2: Translate question to content language (learning language)
       let translatedQuestion = formulatedQuestion;
       if (targetLanguage) {
-        console.log('Step 2: Translating image question to', targetLanguage);
+        console.log('Step 2: Translating image question to content language:', targetLanguage);
         try {
-          // Default source language to Dutch (most common content language)
-          translatedQuestion = await translateText(formulatedQuestion, targetLanguage, 'nl');
+          // Translate from English (AI response) to content language
+          translatedQuestion = await translateText(formulatedQuestion, targetLanguage, 'en');
           console.log('Translated question:', translatedQuestion);
         } catch (translationError) {
           console.warn('Translation failed, using original question:', translationError);
@@ -529,11 +529,13 @@ export const processQuestionWorkflow = async (selectedText, targetLanguage = nul
     const formulatedQuestion = formulationResult.response.trim();
     console.log('Formulated question:', formulatedQuestion);
     
-    // Step 2: Detect language if not provided and translate
+    // Step 2: Translate to content language (learning language)
+    // AI generates questions in English, so we translate from 'en' to the content language
     let translatedQuestion = formulatedQuestion;
     if (targetLanguage) {
-      console.log('Step 2: Translating question to', targetLanguage);
-      translatedQuestion = await translateText(formulatedQuestion, targetLanguage);
+      console.log('Step 2: Translating question from English to content language:', targetLanguage);
+      // Translate from English (AI response) to content language
+      translatedQuestion = await translateText(formulatedQuestion, targetLanguage, 'en');
       console.log('Translated question:', translatedQuestion);
     } else {
       // Try to detect language from selected text
@@ -542,7 +544,8 @@ export const processQuestionWorkflow = async (selectedText, targetLanguage = nul
         const languageInfo = await detectLanguage(selectedText);
         if (languageInfo && languageInfo.detectedLanguage) {
           console.log('Step 2: Detected language:', languageInfo.detectedLanguage, 'Translating question...');
-          translatedQuestion = await translateText(formulatedQuestion, languageInfo.detectedLanguage);
+          // Translate from English (AI response) to detected language
+          translatedQuestion = await translateText(formulatedQuestion, languageInfo.detectedLanguage, 'en');
           console.log('Translated question:', translatedQuestion);
         }
       } catch (detectionError) {

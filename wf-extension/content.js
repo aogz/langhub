@@ -370,13 +370,16 @@
         }, 2000);
     }
 
-    function sendTextToLanghub(text, source = 'manual') {
+    async function sendTextToLanghub(text, source = 'manual') {
         const cleanedText = cleanSelectedText(text);
         
         if (!cleanedText) {
             console.log('No text to send after cleaning');
             return;
         }
+
+        // Detect page language for text selections
+        const detectedLanguage = await detectPageLanguage();
 
         const message = {
             type: 'text-selection',
@@ -385,7 +388,8 @@
             title: document.title,
             timestamp: new Date().toISOString(),
             userAgent: navigator.userAgent,
-            source: source // 'manual' for text selection, 'click' for paragraph click
+            source: source, // 'manual' for text selection, 'click' for paragraph click
+            detectedLanguage: detectedLanguage || null
         };
 
         webfuse.currentSession.sendMessage(message, "*");

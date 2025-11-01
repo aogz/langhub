@@ -317,6 +317,10 @@ const UnifiedSidebar = ({
                         const currentSelection = selectedTexts[selectedTexts.length - 1];
                         const isImage = currentSelection.type === 'image';
                         
+                        // Get the content language (detected language or auto-detect)
+                        // Questions should be translated to the content language, not native language
+                        const contentLanguage = currentSelection.detectedLanguage || null;
+                        
                         // Use the new question workflow for question actions
                         let data;
                         if (actionType === 'question') {
@@ -325,10 +329,10 @@ const UnifiedSidebar = ({
                             data = await processImageQuestionWorkflow(
                               currentSelection.imageData || currentSelection.imageUrl, 
                               currentSelection.alt || '',
-                              nativeLanguage
+                              contentLanguage
                             );
                           } else {
-                            data = await processQuestionWorkflow(currentSelection.content, nativeLanguage);
+                            data = await processQuestionWorkflow(currentSelection.content, contentLanguage);
                           }
                         } else {
                           if (isImage) {

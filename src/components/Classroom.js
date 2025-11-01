@@ -496,6 +496,7 @@ export default function Classroom() {
         id: Date.now(),
         content: message.data.text,
         isCollapsed: false, // Keep new text blocks collapsed by default
+        detectedLanguage: message.data.detectedLanguage || null,
         source: {
           url: message.data.url,
           title: message.data.title,

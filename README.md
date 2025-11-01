@@ -107,7 +107,7 @@ We've made it simple for you to test Langhub.
 
     -   Open the Langhub web app (typically running on `http://localhost:3000`)
     -   Navigate to Settings
-    -   Set your native language and the language you want to learn
+    -   Set your native language
     -   Click **"Save Settings"**
 
 5. **Enable Experimental APIs** (Optional):
