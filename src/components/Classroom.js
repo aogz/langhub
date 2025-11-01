@@ -32,6 +32,10 @@ export default function Classroom() {
   const [isSpeechRecognitionSupported, setIsSpeechRecognitionSupported] = useState(false);
   const [showBrowserWarning, setShowBrowserWarning] = useState(false);
   const recognitionRef = useRef(null);
+  // Audio recording state
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const streamRef = useRef(null);
   // Ref for the chat messages container to enable auto-scrolling
   const chatMessagesRef = useRef(null);
   // Ref for the selected texts container to enable auto-scrolling
@@ -216,6 +220,202 @@ export default function Classroom() {
     }
   }, [activeQuestionContext, chatHistory]);
 
+  // Stop recording without sending
+  const stopRecording = useCallback(() => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    audioChunksRef.current = [];
+  }, []);
+
+  // Start audio recording
+  const startAudioRecording = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/ogg'
+      });
+      
+      audioChunksRef.current = [];
+      
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+      
+      mediaRecorder.onstop = () => {
+        // Recording stopped, audio chunks are ready in audioChunksRef.current
+      };
+      
+      mediaRecorder.start();
+      mediaRecorderRef.current = mediaRecorder;
+      
+      return true;
+    } catch (error) {
+      console.error('Error starting audio recording:', error);
+      return false;
+    }
+  }, []);
+
+  // Send message with audio to model (needs to be defined before stopRecordingAndSend)
+  const sendMessageWithAudio = useCallback(async (audioBlob, transcript = '') => {
+    try {
+      // Add user message to chat history (use transcript if available, otherwise indicate audio)
+      const userMessageText = transcript || '🎤 Audio message';
+      setChatHistory(prev => [...prev, { text: userMessageText, sender: 'user' }]);
+      setCurrentMessage(''); // Clear input field
+      
+      // Immediately scroll to bottom
+      if (chatMessagesRef.current) {
+        requestAnimationFrame(() => {
+          if (chatMessagesRef.current) {
+            chatMessagesRef.current.scrollTop = chatMessagesRef.current.scrollHeight;
+          }
+        });
+      }
+      
+      setLoadingAction('question');
+      
+      // Convert audio blob to File
+      const audioFile = new File([audioBlob], 'audio.webm', { type: audioBlob.type || 'audio/webm' });
+      
+      // Get current context
+      const isAnsweringQuestion = activeQuestionContext.question && activeQuestionContext.originalText;
+      const originalText = activeQuestionContext.originalText || (selectedTexts.length > 0 ? selectedTexts[selectedTexts.length - 1].content : '');
+      
+      // Import the audio processing function
+      const { processAudioWithPrompt } = await import('../utils/promptAPI');
+      
+      let data;
+      if (isAnsweringQuestion) {
+        data = await processAudioWithPrompt(
+          audioFile,
+          originalText,
+          activeQuestionContext.question,
+          transcript,
+          'answer'
+        );
+      } else {
+        data = await processAudioWithPrompt(
+          audioFile,
+          originalText || '',
+          '',
+          transcript,
+          'question'
+        );
+      }
+      
+      if (!data.success) {
+        // Fallback to transcript if audio processing fails
+        if (transcript) {
+          await sendMessage(transcript);
+          return;
+        } else {
+          throw new Error(data.error || 'Failed to process audio');
+        }
+      }
+      
+      // Add the response to chat history
+      setChatHistory(prev => [...prev, { 
+        text: data.response, 
+        sender: 'ai', 
+        actionType: data.actionType || 'question'
+      }]);
+      
+      // Handle different response types
+      if (data.actionType === 'question') {
+        setActiveQuestionContext({
+          originalText: isAnsweringQuestion ? activeQuestionContext.originalText : (originalText || ''),
+          question: data.response,
+        });
+      } else {
+        setActiveQuestionContext({ originalText: null, question: null });
+      }
+      
+    } catch (error) {
+      console.error('Error processing audio:', error);
+      
+      // Fallback to transcript
+      if (transcript) {
+        await sendMessage(transcript);
+      } else {
+        setChatHistory(prev => [...prev, { 
+          text: `Error processing audio: ${error.message}. Please try speaking again.`, 
+          sender: 'ai', 
+          actionType: 'error' 
+        }]);
+      }
+    } finally {
+      setLoadingAction(null);
+    }
+  }, [activeQuestionContext, selectedTexts, chatHistory, sendMessage, chatMessagesRef]);
+
+  // Stop recording and send audio to model
+  const stopRecordingAndSend = useCallback(async (transcript = '') => {
+    return new Promise((resolve) => {
+      // Stop media recorder
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+        // Store the original onstop handler
+        const originalOnStop = mediaRecorderRef.current.onstop;
+        
+        // Set new handler that will process the audio
+        mediaRecorderRef.current.onstop = () => {
+          // Call original handler if it exists
+          if (originalOnStop) originalOnStop();
+          
+          if (audioChunksRef.current.length > 0) {
+            const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+            audioChunksRef.current = [];
+            
+            // Send audio directly to model, with transcript as fallback
+            sendMessageWithAudio(audioBlob, transcript).then(resolve);
+          } else {
+            // No audio recorded, fallback to transcript
+            if (transcript) {
+              sendMessage(transcript).then(() => resolve());
+            } else {
+              resolve();
+            }
+          }
+          
+          // Stop audio stream
+          if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop());
+            streamRef.current = null;
+          }
+        };
+        
+        mediaRecorderRef.current.stop();
+      } else {
+        // Already stopped or never started
+        if (audioChunksRef.current.length > 0) {
+          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+          audioChunksRef.current = [];
+          sendMessageWithAudio(audioBlob, transcript).then(resolve);
+        } else {
+          if (transcript) {
+            sendMessage(transcript).then(() => resolve());
+          } else {
+            resolve();
+          }
+        }
+        
+        // Stop audio stream
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach(track => track.stop());
+          streamRef.current = null;
+        }
+      }
+    });
+  }, [sendMessageWithAudio, sendMessage]);
+
   // --- Speech Recognition Setup ---
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -252,8 +452,8 @@ export default function Classroom() {
 
       // Check if the speech recognition has finalized
       if (event.results[0].isFinal) {
-        // Automatically send the message once the user stops talking
-        sendMessage(transcript);
+        // Stop recording and send audio with transcript as fallback
+        stopRecordingAndSend(transcript);
       }
     };
 
@@ -261,14 +461,22 @@ export default function Classroom() {
 
     return () => {
       recognition.stop();
+      stopRecording();
     };
-  }, [sendMessage]);
+  }, [stopRecording, stopRecordingAndSend]);
 
-  const handleMicClick = () => {
+  const handleMicClick = async () => {
     if (isListening) {
+      // Stop recording and recognition
       recognitionRef.current?.stop();
+      await stopRecordingAndSend();
     } else {
-      recognitionRef.current?.start();
+      // Start audio recording first
+      const recordingStarted = await startAudioRecording();
+      if (recordingStarted) {
+        // Then start speech recognition for transcript fallback
+        recognitionRef.current?.start();
+      }
     }
   };
 
@@ -312,6 +520,50 @@ export default function Classroom() {
       setActiveQuestionContext({ originalText: null, question: null });
       
       // Auto-open mobile sidebar when text is selected
+      setShowMobileSidebar(true);
+      // Notify product tour that a selection exists
+      setTimeout(() => {
+        window.dispatchEvent(new Event('langhub:text-selected'));
+      }, 0);
+    } else if (message.data && message.data.type === 'image-selection') {
+      console.log('Processing image selection:', {
+        imageUrl: message.data.imageUrl,
+        url: message.data.url,
+        title: message.data.title
+      });
+      
+      const newImage = {
+        id: Date.now(),
+        type: 'image',
+        imageData: message.data.imageData,
+        imageUrl: message.data.imageUrl,
+        alt: message.data.alt || '',
+        detectedLanguage: message.data.detectedLanguage || null,
+        isCollapsed: false,
+        source: {
+          url: message.data.url,
+          title: message.data.title,
+          timestamp: message.data.timestamp
+        }
+      };
+      
+      console.log('Adding new image to selectedTexts:', newImage);
+      setSelectedTexts(prev => {
+        const updated = [...prev, newImage];
+        console.log('Updated selectedTexts:', updated);
+        return updated;
+      });
+      
+      // Save current chat history before switching to new image
+      saveCurrentChatHistory();
+      
+      // Create new chat session for the new image
+      createNewChatSession(newImage.id, `Image: ${newImage.alt || 'No description'}`, newImage.source);
+      
+      // Clear active contexts for new image
+      setActiveQuestionContext({ originalText: null, question: null });
+      
+      // Auto-open mobile sidebar when image is selected
       setShowMobileSidebar(true);
       // Notify product tour that a selection exists
       setTimeout(() => {

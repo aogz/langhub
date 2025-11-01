@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 
 const TopBar = ({ 
@@ -13,7 +13,146 @@ const TopBar = ({
   isImmersiveMode = false,
   onToggleImmersiveMode = null
 }) => {
+  const [showTranslatePopover, setShowTranslatePopover] = useState(false);
+  const [translationText, setTranslationText] = useState('');
+  const [translatedText, setTranslatedText] = useState('');
+  const [sourceLanguage, setSourceLanguage] = useState('nl');
+  const [targetLanguage, setTargetLanguage] = useState('en');
+  const [isTranslating, setIsTranslating] = useState(false);
+  const popoverRef = useRef(null);
 
+  // Common languages with flags and names
+  const languages = [
+    { code: 'en', name: 'English', flag: '🇺🇸' },
+    { code: 'nl', name: 'Dutch', flag: '🇳🇱' },
+    { code: 'es', name: 'Spanish', flag: '🇪🇸' },
+    { code: 'fr', name: 'French', flag: '🇫🇷' },
+    { code: 'de', name: 'German', flag: '🇩🇪' },
+    { code: 'it', name: 'Italian', flag: '🇮🇹' },
+    { code: 'pt', name: 'Portuguese', flag: '🇵🇹' },
+    { code: 'ru', name: 'Russian', flag: '🇷🇺' },
+    { code: 'ja', name: 'Japanese', flag: '🇯🇵' },
+    { code: 'ko', name: 'Korean', flag: '🇰🇷' },
+    { code: 'zh', name: 'Chinese', flag: '🇨🇳' },
+    { code: 'ar', name: 'Arabic', flag: '🇸🇦' },
+    { code: 'hi', name: 'Hindi', flag: '🇮🇳' },
+  ];
+
+  // Check if Chrome 138+ and Translator API available
+  const isChrome138Plus = () => {
+    try {
+      const nav = navigator;
+      if (nav.userAgentData && Array.isArray(nav.userAgentData.brands)) {
+        const edgeBrand = nav.userAgentData.brands.find(b => /Edg|Edge|Microsoft Edge/i.test(b.brand));
+        const chromeBrand = nav.userAgentData.brands.find(b => /Google Chrome|Chromium|Chrome/i.test(b.brand));
+        if (chromeBrand && !edgeBrand) {
+          const major = parseInt(String(chromeBrand.version || '').split('.')[0], 10);
+          if (!Number.isNaN(major) && major >= 138) return true;
+        }
+      }
+      const ua = nav.userAgent || '';
+      if (/Edg\//.test(ua)) return false;
+      const m = ua.match(/Chrome\/(\d+)/);
+      if (m && parseInt(m[1], 10) >= 138) return true;
+    } catch {}
+    return false;
+  };
+
+  // Auto-translate when text changes
+  useEffect(() => {
+    if (!translationText.trim()) {
+      setTranslatedText('');
+      setIsTranslating(false);
+      return;
+    }
+
+    if (sourceLanguage === targetLanguage) {
+      setTranslatedText('');
+      setIsTranslating(false);
+      return;
+    }
+
+    // Debounce translation
+    const timeoutId = setTimeout(async () => {
+      setIsTranslating(true);
+      setTranslatedText('');
+
+      try {
+        const TranslatorAPI = typeof window !== 'undefined' ? window.Translator : undefined;
+        if (!TranslatorAPI || !isChrome138Plus()) {
+          setTranslatedText('Translation requires Chrome 138+ with Translator API support.');
+          setIsTranslating(false);
+          return;
+        }
+
+        const translator = await TranslatorAPI.create({
+          sourceLanguage,
+          targetLanguage,
+        });
+
+        const translated = await translator.translate(translationText);
+        setTranslatedText(translated || 'Translation not available');
+      } catch (error) {
+        console.error('Translation error:', error);
+        setTranslatedText(`Translation failed: ${error.message}`);
+      } finally {
+        setIsTranslating(false);
+      }
+    }, 500); // 500ms debounce
+
+    return () => clearTimeout(timeoutId);
+  }, [translationText, sourceLanguage, targetLanguage]);
+
+  // Handle copy to clipboard
+  const handleCopyToClipboard = async () => {
+    if (!translatedText) return;
+
+    try {
+      await navigator.clipboard.writeText(translatedText);
+      // Show brief success feedback
+      const copyButton = document.querySelector('[data-copy-button]');
+      if (copyButton) {
+        const originalText = copyButton.innerHTML;
+        copyButton.innerHTML = '✓ Copied!';
+        copyButton.classList.add('bg-green-600');
+        setTimeout(() => {
+          copyButton.innerHTML = originalText;
+          copyButton.classList.remove('bg-green-600');
+        }, 2000);
+      }
+    } catch (error) {
+      console.error('Failed to copy to clipboard:', error);
+    }
+  };
+
+  // Close popover when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (popoverRef.current && !popoverRef.current.contains(event.target)) {
+        // Check if click is not on the translate button
+        if (!event.target.closest('[data-translate-button]')) {
+          setShowTranslatePopover(false);
+        }
+      }
+    };
+
+    if (showTranslatePopover) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
+  }, [showTranslatePopover]);
+
+  // Swap languages
+  const handleSwapLanguages = () => {
+    setSourceLanguage(targetLanguage);
+    setTargetLanguage(sourceLanguage);
+    if (translatedText) {
+      setTranslationText(translatedText);
+      setTranslatedText('');
+    }
+  };
 
   return (
     <div className="p-2 lg:p-2 border-b border-gray-700">
@@ -143,6 +282,140 @@ const TopBar = ({
                   </svg>
                 </button>
               )}
+
+              {/* Translate Button */}
+              <div className="relative">
+                <button
+                  data-translate-button
+                  onClick={() => setShowTranslatePopover(!showTranslatePopover)}
+                  className="flex items-center hover:bg-gray-800 p-1 lg:p-2 rounded-full transition-colors min-w-[32px] min-h-[32px] lg:min-w-0 lg:min-h-0 text-gray-400 hover:text-white"
+                  title="Translate"
+                >
+                  <svg className="w-5 h-5 lg:w-6 lg:h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.083 9.5c.319-.9.652-1.784 1.001-2.649M15 19a18.022 18.022 0 003.917-2.5c.319-.9.652-1.784 1.001-2.649M9 17H3m6-10H3m9 7h6m-6-7h6m-6 3h3" />
+                  </svg>
+                </button>
+
+                {/* Translate Popover */}
+                {showTranslatePopover && (
+                  <div
+                    ref={popoverRef}
+                    className="absolute right-0 top-full mt-2 w-96 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50 p-4"
+                  >
+                    <div className="space-y-4">
+                      {/* Header */}
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-lg font-semibold text-white">Translate</h3>
+                        <button
+                          onClick={() => setShowTranslatePopover(false)}
+                          className="text-gray-400 hover:text-white"
+                        >
+                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+
+                      {/* Language Selectors */}
+                      <div className="flex items-center gap-2">
+                        {/* Source Language */}
+                        <div className="flex-1">
+                          <label className="block text-xs text-gray-400 mb-1">From</label>
+                          <select
+                            value={sourceLanguage}
+                            onChange={(e) => {
+                              setSourceLanguage(e.target.value);
+                              setTranslatedText('');
+                            }}
+                            className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            {languages.map((lang) => (
+                              <option key={lang.code} value={lang.code}>
+                                {lang.flag} {lang.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Swap Button */}
+                        <button
+                          onClick={handleSwapLanguages}
+                          className="mt-6 p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors"
+                          title="Swap languages"
+                        >
+                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                          </svg>
+                        </button>
+
+                        {/* Target Language */}
+                        <div className="flex-1">
+                          <label className="block text-xs text-gray-400 mb-1">To</label>
+                          <select
+                            value={targetLanguage}
+                            onChange={(e) => {
+                              setTargetLanguage(e.target.value);
+                              setTranslatedText('');
+                            }}
+                            className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            {languages.map((lang) => (
+                              <option key={lang.code} value={lang.code}>
+                                {lang.flag} {lang.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Input Field */}
+                      <div>
+                        <label className="block text-xs text-gray-400 mb-1">Text to translate</label>
+                        <textarea
+                          value={translationText}
+                          onChange={(e) => setTranslationText(e.target.value)}
+                          placeholder="Enter text to translate..."
+                          className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                          rows={4}
+                        />
+                      </div>
+
+                      {/* Translation Result */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-xs text-gray-400">Translation</label>
+                          {isTranslating && (
+                            <div className="flex items-center gap-2 text-xs text-gray-400">
+                              <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              </svg>
+                              Translating...
+                            </div>
+                          )}
+                        </div>
+                        <div className="relative">
+                          <div className="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-white text-sm min-h-[100px]">
+                            {translatedText || (translationText.trim() && sourceLanguage === targetLanguage ? 'Select different languages to translate' : 'Translation will appear here...')}
+                          </div>
+                          {translatedText && (
+                            <button
+                              data-copy-button
+                              onClick={handleCopyToClipboard}
+                              className="absolute top-2 right-2 p-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
+                              title="Copy to clipboard"
+                            >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {/* Settings Link */}
               <Link

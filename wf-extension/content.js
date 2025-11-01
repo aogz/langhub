@@ -1,4 +1,4 @@
-// Content script for text selection and Scaledrone integration
+// Content script for text selection
 (function() {
     'use strict';
 
@@ -18,6 +18,36 @@
         s.parentNode.insertBefore(u, s);
     })(window, document, 'script', 'webfuse');
 
+    // Create and show loader
+    function showLoader() {
+        // Remove existing loader if any
+        const existingLoader = document.getElementById('text-selection-loader');
+        if (existingLoader) {
+            existingLoader.remove();
+        }
+
+        const loader = document.createElement('div');
+        loader.id = 'text-selection-loader';
+        loader.innerHTML = `
+            <div class="text-selection-loader-content">
+                <div class="text-selection-loader-spinner"></div>
+                <div class="text-selection-loader-text">Loading Langhub...</div>
+            </div>
+        `;
+        document.body.appendChild(loader);
+    }
+
+    // Hide loader
+    function hideLoader() {
+        const loader = document.getElementById('text-selection-loader');
+        if (loader) {
+            loader.style.opacity = '0';
+            setTimeout(() => {
+                loader.remove();
+            }, 300);
+        }
+    }
+
     webfuse.initSpace(
         'wk_dZpCZW62PvGfVaJZK9U7XXKm4tL1u_Bg',
         '1248',
@@ -26,48 +56,18 @@
         webfuse.currentSession.on('message', function (session, event) {
             console.log(event, session);
         });
+
+        webfuse.currentSession.on('session_created', function (session, event) {
+            console.log('Session created', event, session);
+            // Hide loader when session is created
+            hideLoader();
+        });
+    }).catch(error => {
+        console.error('Failed to initialize webfuse:', error);
+        // Hide loader even on error
+        hideLoader();
     });
 
-    // Scaledrone configuration
-    const SCALEDRONE_CHANNEL_ID = 'br4FkhdzF498EuJA'; // Replace with your actual channel ID
-
-    // Initialize Scaledrone
-    let drone = null;
-    let room = null;
-
-    // Initialize Scaledrone connection
-    function initializeScaledrone() {
-        try {
-            drone = new Scaledrone(SCALEDRONE_CHANNEL_ID, {
-                data: {
-                    name: 'Text Selection Extension',
-                    color: '#ff0000'
-                }
-            });
-
-            drone.on('open', function(error) {
-                if (error) {
-                    console.error('Scaledrone connection error:', error);
-                    return;
-                }
-                console.log('Connected to Scaledrone');
-                
-                // Join a room for text selections
-                room = drone.subscribe('text-selections');
-            });
-
-            drone.on('error', function(error) {
-                console.error('Scaledrone error:', error);
-            });
-
-            drone.on('close', function(event) {
-                console.log('Scaledrone connection closed:', event);
-            });
-
-        } catch (error) {
-            console.error('Failed to initialize Scaledrone:', error);
-        }
-    }
 
     // Clean selected text
     function cleanSelectedText(text) {
@@ -259,6 +259,90 @@
                 50% { transform: rotate(180deg) scale(1.05); }
                 100% { transform: rotate(360deg) scale(1); }
             }
+
+            .text-selection-extension-image {
+                transition: opacity 150ms ease-in-out;
+                display: inline-block !important;
+                visibility: visible !important;
+            }
+            
+            .text-selection-extension-image:hover {
+                filter: brightness(1.1);
+            }
+
+            /* Start Learning Button */
+            .text-selection-start-learning-btn {
+                position: fixed;
+                bottom: 30px;
+                left: 50%;
+                transform: translateX(-50%);
+                z-index: 999998;
+                background: linear-gradient(135deg, #3b82f6, #2563eb);
+                color: white;
+                border: none;
+                border-radius: 12px;
+                padding: 14px 32px;
+                font-size: 16px;
+                font-weight: 600;
+                cursor: pointer;
+                box-shadow: 0 4px 20px rgba(59, 130, 246, 0.4);
+                transition: all 0.3s ease;
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            }
+
+            .text-selection-start-learning-btn:hover {
+                background: linear-gradient(135deg, #2563eb, #1d4ed8);
+                transform: translateX(-50%) translateY(-2px);
+                box-shadow: 0 8px 30px rgba(59, 130, 246, 0.5);
+            }
+
+            .text-selection-start-learning-btn:active {
+                transform: translateX(-50%) translateY(0);
+            }
+
+            /* Loader Styles */
+            #text-selection-loader {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(17, 24, 39, 0.9);
+                backdrop-filter: blur(8px);
+                z-index: 9999999;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: opacity 0.3s ease-out;
+            }
+
+            .text-selection-loader-content {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 20px;
+            }
+
+            .text-selection-loader-spinner {
+                width: 50px;
+                height: 50px;
+                border: 4px solid rgba(59, 130, 246, 0.2);
+                border-top-color: #3b82f6;
+                border-radius: 50%;
+                animation: text-selection-spin 1s linear infinite;
+            }
+
+            .text-selection-loader-text {
+                color: #f9fafb;
+                font-size: 18px;
+                font-weight: 500;
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            }
+
+            @keyframes text-selection-spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
         `;
         document.head.appendChild(style);
     }
@@ -307,6 +391,238 @@
         webfuse.currentSession.sendMessage(message, "*");
     }
 
+    // Convert image to base64 data URL
+    function imageToDataURL(img) {
+        return new Promise((resolve, reject) => {
+            // If already a data URL, return it
+            if (img.src && img.src.startsWith('data:')) {
+                resolve(img.src);
+                return;
+            }
+            
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Create a new image to handle cross-origin issues
+            const newImg = new Image();
+            newImg.crossOrigin = 'anonymous';
+            
+            newImg.onload = () => {
+                try {
+                    canvas.width = newImg.naturalWidth || newImg.width;
+                    canvas.height = newImg.naturalHeight || newImg.height;
+                    ctx.drawImage(newImg, 0, 0);
+                    const dataURL = canvas.toDataURL('image/png');
+                    resolve(dataURL);
+                } catch (error) {
+                    // Fallback: try to use the original image src if it's a data URL
+                    if (img.src && img.src.startsWith('data:')) {
+                        resolve(img.src);
+                    } else {
+                        reject(error);
+                    }
+                }
+            };
+            
+            newImg.onerror = () => {
+                // Fallback: try to use the original image src
+                if (img.src && img.src.startsWith('data:')) {
+                    resolve(img.src);
+                } else {
+                    reject(new Error('Failed to load image'));
+                }
+            };
+            
+            // Load the image
+            newImg.src = img.src;
+        });
+    }
+
+    // Handle image click
+    async function handleImageClick(event) {
+        // Only stop propagation to avoid triggering other handlers
+        // Don't prevent default to allow normal image behavior
+        event.stopPropagation();
+        
+        const img = event.currentTarget;
+        const originalSrc = img.src;
+        
+        // Detect page language
+        const detectedLanguage = await detectPageLanguage();
+        
+        // Convert image to data URL without modifying the original image element
+        imageToDataURL(img)
+            .then(dataURL => {
+                const message = {
+                    type: 'image-selection',
+                    imageData: dataURL,
+                    imageUrl: originalSrc,
+                    url: window.location.href,
+                    title: document.title,
+                    timestamp: new Date().toISOString(),
+                    alt: img.alt || '',
+                    source: 'click',
+                    detectedLanguage: detectedLanguage || null
+                };
+                
+                webfuse.currentSession.sendMessage(message, "*");
+                
+                // Show success overlay (doesn't modify the image)
+                showImageOverlay(img);
+                
+                // Update button to "Next" when image is selected
+                setTimeout(() => {
+                    updateButtonText('Next');
+                    currentSelectedElement = img;
+                }, 50);
+            })
+            .catch(error => {
+                console.error('Failed to capture image:', error);
+                // Try to send the image URL as fallback
+                const message = {
+                    type: 'image-selection',
+                    imageUrl: originalSrc,
+                    url: window.location.href,
+                    title: document.title,
+                    timestamp: new Date().toISOString(),
+                    alt: img.alt || '',
+                    source: 'click',
+                    error: 'Failed to convert image to data URL',
+                    detectedLanguage: detectedLanguage || null
+                };
+                webfuse.currentSession.sendMessage(message, "*");
+            });
+    }
+
+    // Show overlay on image after selection
+    function showImageOverlay(img) {
+        // Don't modify the image or its parent - just show a floating overlay
+        const overlay = document.createElement('div');
+        overlay.className = 'text-selection-overlay';
+        overlay.style.pointerEvents = 'none';
+        overlay.style.position = 'fixed';
+        overlay.style.zIndex = '999999';
+        
+        const messageEl = document.createElement('div');
+        messageEl.className = 'text-selection-overlay-message';
+        messageEl.innerHTML = 'Image captured. Ask questions about it in the app →';
+        overlay.appendChild(messageEl);
+        
+        // Position overlay near the image without modifying image or parent
+        const rect = img.getBoundingClientRect();
+        overlay.style.left = (rect.left + rect.width / 2) + 'px';
+        overlay.style.top = (rect.top + rect.height / 2) + 'px';
+        overlay.style.transform = 'translate(-50%, -50%)';
+        
+        document.body.appendChild(overlay);
+        
+        setTimeout(() => {
+            if (overlay && overlay.parentNode) overlay.remove();
+        }, 1500);
+    }
+
+    // Track hovered image for opacity effects
+    let hoveredImage = null;
+    let allClickableImages = [];
+
+    // Update image opacity based on hover
+    function updateImageOpacity() {
+        allClickableImages.forEach((img, index) => {
+            if (hoveredImage === null) {
+                img.style.opacity = '1';
+                return;
+            }
+            
+            const hoveredIndex = allClickableImages.indexOf(hoveredImage);
+            const distance = Math.abs(index - hoveredIndex);
+            
+            if (distance === 0) {
+                img.style.opacity = '1';
+            } else if (distance === 1) {
+                img.style.opacity = '0.9';
+            } else if (distance === 2) {
+                img.style.opacity = '0.8';
+            } else {
+                img.style.opacity = '0.7';
+            }
+        });
+    }
+
+    // Detect page language
+    async function detectPageLanguage() {
+        try {
+            // Try to detect from document lang attribute first
+            const htmlLang = document.documentElement.lang;
+            if (htmlLang && htmlLang.length >= 2) {
+                return htmlLang.split('-')[0]; // Get language code (e.g., 'en' from 'en-US')
+            }
+            
+            // Try to detect from page text
+            const pageText = document.body.innerText || document.body.textContent || '';
+            if (pageText && pageText.trim().length > 100) {
+                // Sample text for detection
+                const sampleText = pageText.substring(0, 1000);
+                
+                // Check if Language Detector API is available
+                if (typeof window !== 'undefined' && window.LanguageDetector) {
+                    try {
+                        const detector = await window.LanguageDetector.create();
+                        const results = await detector.detect(sampleText);
+                        if (results && results.length > 0 && results[0].confidence > 0.3) {
+                            return results[0].detectedLanguage;
+                        }
+                    } catch (error) {
+                        console.warn('Language detection API not available:', error);
+                    }
+                }
+            }
+            
+            return null;
+        } catch (error) {
+            console.warn('Failed to detect page language:', error);
+            return null;
+        }
+    }
+
+    // Make images clickable
+    function makeImagesClickable() {
+        // Clear old array when re-running
+        allClickableImages = allClickableImages.filter(img => img.isConnected);
+        
+        const images = document.querySelectorAll('img:not(.text-selection-extension-image)');
+        
+        images.forEach(img => {
+            // Skip if already processed
+            if (img.classList.contains('text-selection-extension-image')) return;
+            
+            // Skip very small images (likely icons)
+            if (img.width < 50 && img.height < 50) return;
+            
+            img.classList.add('text-selection-extension-image');
+            img.style.cursor = 'pointer';
+            img.style.transition = 'opacity 150ms ease-in-out';
+            img.style.opacity = '1';
+            
+            // Add hover handlers
+            img.addEventListener('mouseenter', () => {
+                hoveredImage = img;
+                updateImageOpacity();
+            });
+            
+            img.addEventListener('mouseleave', () => {
+                hoveredImage = null;
+                updateImageOpacity();
+            });
+            
+            img.addEventListener('click', handleImageClick);
+            
+            allClickableImages.push(img);
+        });
+        
+        // Invalidate cache when images are made clickable
+        invalidateClickableElementsCache();
+    }
+
     // Determine if the click happened inside an interactive element (e.g., link)
     function isClickInsideInteractiveElement(target) {
         if (!target || !(target instanceof Element)) return false;
@@ -332,9 +648,19 @@
         document.querySelectorAll('.text-selection-selected').forEach(el => {
             el.classList.remove('text-selection-selected');
         });
+        document.querySelectorAll(`.${EXT_CLS_PREFIX}-selected`).forEach(el => {
+            el.classList.remove(`${EXT_CLS_PREFIX}-selected`);
+        });
         
         // Add selection highlight to clicked paragraph
         paragraph.classList.add('text-selection-selected');
+        paragraph.classList.add(`${EXT_CLS_PREFIX}-selected`);
+        
+        // Update button to "Next" when element is selected
+        setTimeout(() => {
+            updateButtonText('Next');
+            currentSelectedElement = paragraph;
+        }, 50);
         
         // Smoothly scroll the clicked paragraph into view for context
         try {
@@ -517,6 +843,9 @@
                 mousemove: tooltipMouseMove
             };
         });
+        
+        // Invalidate cache when elements are made clickable
+        invalidateClickableElementsCache();
     }
 
     // Handle text selection (keep existing functionality)
@@ -572,34 +901,263 @@
             subtree: true
         });
         
+        // Also observe for new images
+        const imageObserver = new MutationObserver((mutations) => {
+            let shouldUpdate = false;
+            
+            mutations.forEach((mutation) => {
+                if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+                    mutation.addedNodes.forEach((node) => {
+                        if (node.nodeType === Node.ELEMENT_NODE) {
+                            if (node.tagName === 'IMG' || node.querySelector('img')) {
+                                shouldUpdate = true;
+                            }
+                        }
+                    });
+                }
+            });
+            
+            if (shouldUpdate) {
+                setTimeout(() => {
+                    makeImagesClickable();
+                }, 500);
+            }
+        });
+        
+        imageObserver.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+        
         return observer;
+    }
+
+    // Cache for clickable elements
+    let clickableElementsCache = null;
+    let cacheTimestamp = 0;
+    const CACHE_DURATION = 5000; // 5 seconds
+
+    // Get all clickable elements in DOM order (images and text blocks)
+    function getAllClickableElements(useCache = true) {
+        const now = Date.now();
+        
+        // Return cached result if still valid
+        if (useCache && clickableElementsCache && (now - cacheTimestamp) < CACHE_DURATION) {
+            return clickableElementsCache;
+        }
+        
+        const elements = [];
+        
+        // Get all clickable images
+        document.querySelectorAll('img.text-selection-extension-image').forEach(img => {
+            elements.push(img);
+        });
+        
+        // Get all clickable text blocks
+        document.querySelectorAll(`.${EXT_CLS_PREFIX}-clickable`).forEach(block => {
+            elements.push(block);
+        });
+        
+        // Simple DOM order sort (much faster than compareDocumentPosition)
+        const sortedElements = elements.sort((a, b) => {
+            if (a === b) return 0;
+            if (document.contains(a) && document.contains(b)) {
+                const position = a.compareDocumentPosition(b);
+                if (position & Node.DOCUMENT_POSITION_FOLLOWING) {
+                    return -1;
+                } else if (position & Node.DOCUMENT_POSITION_PRECEDING) {
+                    return 1;
+                }
+            }
+            return 0;
+        });
+        
+        // Update cache
+        clickableElementsCache = sortedElements;
+        cacheTimestamp = now;
+        
+        return sortedElements;
+    }
+    
+    // Invalidate cache
+    function invalidateClickableElementsCache() {
+        clickableElementsCache = null;
+        cacheTimestamp = 0;
+    }
+
+    // Find first clickable element (image or text block)
+    function findFirstClickableElement() {
+        const allElements = getAllClickableElements();
+        return allElements.length > 0 ? allElements[0] : null;
+    }
+
+    // Find next clickable element after the current one
+    function findNextClickableElement(currentElement) {
+        const allElements = getAllClickableElements();
+        if (allElements.length === 0) return null;
+        
+        const currentIndex = allElements.indexOf(currentElement);
+        if (currentIndex === -1) {
+            // Current element not found, return first
+            return allElements[0];
+        }
+        
+        // Return next element, or null if it's the last one
+        return currentIndex < allElements.length - 1 ? allElements[currentIndex + 1] : null;
+    }
+
+    // Get currently selected element
+    function getCurrentSelectedElement() {
+        // Check for selected text block
+        const selectedTextBlock = document.querySelector(`.${EXT_CLS_PREFIX}-selected`);
+        if (selectedTextBlock) return selectedTextBlock;
+        
+        // Check for recently selected (could be temporary class)
+        const selectedBlock = document.querySelector(`.${EXT_CLS_PREFIX}-clickable.${EXT_CLS_PREFIX}-selected`);
+        if (selectedBlock) return selectedBlock;
+        
+        return null;
+    }
+
+    // Track current selected element
+    let currentSelectedElement = null;
+
+    // Handle button click (Start learning or Next)
+    function handleButtonClick() {
+        let targetElement;
+        
+        if (currentSelectedElement) {
+            // Find next element
+            targetElement = findNextClickableElement(currentSelectedElement);
+            if (!targetElement) {
+                // No more elements, reset to first
+                targetElement = findFirstClickableElement();
+                currentSelectedElement = null;
+            }
+        } else {
+            // Find first element
+            targetElement = findFirstClickableElement();
+        }
+        
+        if (targetElement) {
+            // Update current selected element
+            currentSelectedElement = targetElement;
+            
+            // Scroll to element first
+            targetElement.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+            
+            // Trigger click after a short delay to ensure scroll has started
+            setTimeout(() => {
+                // Create a synthetic click event
+                const clickEvent = new MouseEvent('click', {
+                    bubbles: true,
+                    cancelable: true,
+                    view: window,
+                    button: 0
+                });
+                targetElement.dispatchEvent(clickEvent);
+                
+                // Update button text to "Next"
+                updateButtonText('Next');
+            }, 300);
+        } else {
+            console.log('No clickable elements found on the page');
+        }
+    }
+
+    // Update button text
+    function updateButtonText(text) {
+        const button = document.querySelector('.text-selection-start-learning-btn');
+        if (button) {
+            button.textContent = text;
+            button.title = text === 'Next' 
+                ? 'Click to select the next text block or image on the page'
+                : 'Click to select the first text block or image on the page';
+        }
+    }
+
+    // Create and add Start Learning button
+    function addStartLearningButton() {
+        // Remove existing button if any
+        const existingButton = document.querySelector('.text-selection-start-learning-btn');
+        if (existingButton) {
+            existingButton.remove();
+        }
+
+        // Create button
+        const button = document.createElement('button');
+        button.className = 'text-selection-start-learning-btn';
+        button.textContent = 'Start learning';
+        button.title = 'Click to select the first text block or image on the page';
+        button.addEventListener('click', handleButtonClick);
+
+        // Add to document
+        document.body.appendChild(button);
+
+        // Debounced selection observer
+        let selectionCheckTimeout = null;
+        const observeSelection = () => {
+            if (selectionCheckTimeout) {
+                clearTimeout(selectionCheckTimeout);
+            }
+            selectionCheckTimeout = setTimeout(() => {
+                const tempSelected = document.querySelector(`.${EXT_CLS_PREFIX}-selected`);
+                if (tempSelected) {
+                    // An element was selected, update button to "Next"
+                    updateButtonText('Next');
+                    currentSelectedElement = tempSelected;
+                }
+            }, 200);
+        };
+
+        // Listen for click events to catch selections immediately (much more efficient than observers)
+        const clickHandler = (e) => {
+            if (e.target.classList.contains(`${EXT_CLS_PREFIX}-clickable`) || 
+                e.target.classList.contains('text-selection-extension-image') ||
+                e.target.closest(`.${EXT_CLS_PREFIX}-clickable`) ||
+                e.target.closest('img.text-selection-extension-image')) {
+                observeSelection();
+            }
+        };
+        document.addEventListener('click', clickHandler, true);
+
+        // Store handler for cleanup
+        button._clickHandler = clickHandler;
+
+        // Update button visibility based on available clickable elements
+        function updateButtonVisibility() {
+            const hasClickableElements = findFirstClickableElement() !== null;
+            button.style.display = hasClickableElements ? 'block' : 'none';
+        }
+
+        // Initial check
+        updateButtonVisibility();
+
+        // Re-check periodically but less frequently (every 5 seconds instead of 2)
+        const visibilityInterval = setInterval(() => {
+            invalidateClickableElementsCache(); // Invalidate cache periodically
+            updateButtonVisibility();
+        }, 5000);
+        
+        // Store interval for cleanup
+        button._visibilityInterval = visibilityInterval;
     }
 
     // Initialize the extension
     function initialize() {
         console.log('Text Selection Extension initialized');
 
-        // Add CSS styles for clickable paragraphs
+        // Add CSS styles for clickable paragraphs (needed for loader)
         addClickableStyles();
-
-        // Load Scaledrone script if not already loaded
-        if (typeof Scaledrone === 'undefined') {
-            const script = document.createElement('script');
-            script.src = 'https://cdn.scaledrone.com/scaledrone.min.js';
-            script.onload = function() {
-                console.log('Scaledrone script loaded');
-                initializeScaledrone();
-            };
-            script.onerror = function() {
-                console.error('Failed to load Scaledrone script');
-            };
-            document.head.appendChild(script);
-        } else {
-            initializeScaledrone();
-        }
+        
+        // Show loader for webfuse session
+        showLoader();
 
         // Make existing elements clickable
         makeElementsClickable();
+        
+        // Make images clickable
+        makeImagesClickable();
         
         // Observe for new content
         observeContentChanges();
@@ -609,6 +1167,12 @@
 
         // Also listen for touch events on mobile
         document.addEventListener('touchend', handleMouseUp);
+
+        // Add Start Learning button
+        // Delay slightly to ensure elements are processed
+        setTimeout(() => {
+            addStartLearningButton();
+        }, 500);
         
         console.log('Text Selection Extension: Clickable paragraphs initialized');
     }
@@ -645,14 +1209,24 @@
             tooltip.parentNode.removeChild(tooltip);
         }
         
+        // Remove Start Learning button
+        const startButton = document.querySelector('.text-selection-start-learning-btn');
+        if (startButton) {
+            // Remove event listener
+            if (startButton._clickHandler) {
+                document.removeEventListener('click', startButton._clickHandler, true);
+            }
+            // Clear interval
+            if (startButton._visibilityInterval) {
+                clearInterval(startButton._visibilityInterval);
+            }
+            startButton.remove();
+        }
+        
         // Remove styles
         const styles = document.getElementById('text-selection-extension-styles');
         if (styles) {
             styles.remove();
-        }
-        
-        if (drone) {
-            drone.close();
         }
         
         console.log('Text Selection Extension cleaned up');

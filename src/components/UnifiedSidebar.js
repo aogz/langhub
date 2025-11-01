@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import SelectedTextBlock from './SelectedTextBlock';
 import TopBar from './TopBar';
 import { useInteractiveText } from '../hooks/useInteractiveText';
-import { processTextWithPrompt, processQuestionWorkflow, checkPromptAPIAvailability } from '../utils/promptAPI';
+import { processTextWithPrompt, processQuestionWorkflow, processImageQuestionWorkflow, checkPromptAPIAvailability } from '../utils/promptAPI';
 
 const TextResponse = ({ text, onWordAdded, actionType, getCurrentSource }) => {
   const { textContainerRef, renderInteractiveContent, Popup } = useInteractiveText(onWordAdded, getCurrentSource);
@@ -281,6 +281,10 @@ const UnifiedSidebar = ({
                     key={selectedTexts[selectedTexts.length - 1].id}
                     content={selectedTexts[selectedTexts.length - 1].content}
                     source={selectedTexts[selectedTexts.length - 1].source}
+                    type={selectedTexts[selectedTexts.length - 1].type}
+                    imageData={selectedTexts[selectedTexts.length - 1].imageData}
+                    imageUrl={selectedTexts[selectedTexts.length - 1].imageUrl}
+                    alt={selectedTexts[selectedTexts.length - 1].alt}
                     isCollapsed={selectedTexts[selectedTexts.length - 1].isCollapsed}
                     onToggleCollapse={() => {
                       setSelectedTexts(prev =>
@@ -305,15 +309,34 @@ const UnifiedSidebar = ({
                           return;
                         }
                         
-                        const selectedText = selectedTexts[selectedTexts.length - 1].content;
-                        
+                        const currentSelection = selectedTexts[selectedTexts.length - 1];
+                        const isImage = currentSelection.type === 'image';
                         
                         // Use the new question workflow for question actions
                         let data;
                         if (actionType === 'question') {
-                          data = await processQuestionWorkflow(selectedText);
+                          if (isImage) {
+                            // Handle image questions
+                            data = await processImageQuestionWorkflow(
+                              currentSelection.imageData || currentSelection.imageUrl, 
+                              currentSelection.alt || '',
+                              currentSelection.detectedLanguage || null
+                            );
+                          } else {
+                            data = await processQuestionWorkflow(currentSelection.content);
+                          }
                         } else {
-                          data = await processTextWithPrompt(selectedText, actionType);
+                          if (isImage) {
+                            setChatHistory(prev => [...prev, { 
+                              text: 'Image questions only support the "Ask about this image" action.', 
+                              sender: 'ai', 
+                              actionType: 'error' 
+                            }]);
+                            setLoadingAction(null);
+                            return;
+                          } else {
+                            data = await processTextWithPrompt(currentSelection.content, actionType);
+                          }
                         }
                         
                         // Add the response to chat history for all action types
@@ -326,13 +349,13 @@ const UnifiedSidebar = ({
                         // If it's a question action, set the question context for follow-ups
                         if (actionType === 'question' && data.actionType === 'question') {
                           setActiveQuestionContext({
-                            originalText: selectedText,
+                            originalText: isImage ? `Image: ${currentSelection.alt || 'No description'}` : currentSelection.content,
                             question: data.response,
                           });
                         }
                         
                       } catch (error) {
-                        console.error('Error processing text:', error);
+                        console.error('Error processing:', error);
                         
                         // Check if it's a Prompt API availability error
                         const availabilityCheck = checkPromptAPIAvailability();
@@ -344,7 +367,7 @@ const UnifiedSidebar = ({
                           }]);
                         } else {
                           setChatHistory(prev => [...prev, { 
-                            text: `Error processing text: ${error.message}`, 
+                            text: `Error: ${error.message}`, 
                             sender: 'ai', 
                             actionType: 'error' 
                           }]);

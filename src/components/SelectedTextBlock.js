@@ -25,12 +25,14 @@ const ActionButton = ({ onClick, icon, label, isLoading, isDisabled }) => (
   </button>
 );
 
-export default function SelectedTextBlock({ content, source, isCollapsed, onToggleCollapse, onAction, onWordAdded, loadingAction, hasHistory, onShowHistory }) {
+export default function SelectedTextBlock({ content, source, isCollapsed, onToggleCollapse, onAction, onWordAdded, loadingAction, hasHistory, onShowHistory, type, imageData, imageUrl, alt }) {
   // Language detection state
   const [languageInfo, setLanguageInfo] = useState(null);
   const [isDetectingLanguage, setIsDetectingLanguage] = useState(false);
   const [languageDetectionError, setLanguageDetectionError] = useState(null);
 
+  const isImage = type === 'image';
+  
   // Provide source getter so vocabulary saves use the selection's page source instead of the app URL
   const getCurrentSource = React.useCallback(() => source || null, [source]);
   const { textContainerRef, renderInteractiveContent, Popup } = useInteractiveText(onWordAdded, getCurrentSource);
@@ -144,16 +146,36 @@ export default function SelectedTextBlock({ content, source, isCollapsed, onTogg
       
       {!isCollapsed && (
         <div className="mt-4 space-y-4" data-tour="selected-text">
-          <div ref={textContainerRef} className="text-gray-200 text-sm leading-relaxed">
-            {renderInteractiveContent(content)}
-          </div>
+          {isImage ? (
+            <div className="flex flex-col items-center">
+              <img
+                src={imageData || imageUrl}
+                alt={alt || 'Selected image'}
+                className="max-w-full h-auto rounded-lg border border-gray-600 shadow-lg"
+                style={{ maxHeight: '400px' }}
+                onError={(e) => {
+                  // Fallback to imageUrl if data URL fails
+                  if (imageData && imageUrl) {
+                    e.target.src = imageUrl;
+                  }
+                }}
+              />
+              {alt && (
+                <p className="text-xs text-gray-400 mt-2 italic">{alt}</p>
+              )}
+            </div>
+          ) : (
+            <div ref={textContainerRef} className="text-gray-200 text-sm leading-relaxed">
+              {renderInteractiveContent(content)}
+            </div>
+          )}
           <Popup />
         
           <div className="grid grid-cols-2 gap-3" data-tour="translation-actions">
             <ActionButton 
               onClick={() => onAction('question')} 
               icon="?" 
-              label="Ask me a question" 
+              label={isImage ? "Ask about this image" : "Ask me a question"} 
               isLoading={loadingAction === 'question'}
               isDisabled={!!loadingAction}
             />

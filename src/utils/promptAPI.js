@@ -31,16 +31,18 @@ export const checkPromptAPIAvailability = () => {
 };
 
 // Create a language model session
-const createLanguageModelSession = async () => {
+const createLanguageModelSession = async (options = {}) => {
   const availability = checkPromptAPIAvailability();
   if (!availability.isAvailable) {
     throw new Error(availability.error);
   }
 
   try {
-    const session = await window.LanguageModel.create({
-      model: 'gemini-2.0-flash-exp'
-    });
+    const sessionConfig = {
+      model: 'gemini-2.0-flash-exp',
+      ...options
+    };
+    const session = await window.LanguageModel.create(sessionConfig);
     return session;
   } catch (error) {
     throw new Error(`Failed to create language model session: ${error.message}`);
@@ -243,6 +245,265 @@ export const processAnswerEvaluationWorkflow = async (originalText, question, us
       response: null
     };
   }
+};
+
+// Convert data URL to Blob for Prompt API
+const dataURLToBlob = (dataURL) => {
+  const arr = dataURL.split(',');
+  const mime = arr[0].match(/:(.*?);/)[1];
+  const bstr = atob(arr[1]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+  while (n--) {
+    u8arr[n] = bstr.charCodeAt(n);
+  }
+  return new Blob([u8arr], { type: mime });
+};
+
+// Process image question workflow
+export const processImageQuestionWorkflow = async (imageDataOrUrl, alt = '', targetLanguage = null) => {
+  let session = null;
+  
+  try {
+    // Convert image data to File/Blob
+      let imageFile;
+      if (imageDataOrUrl.startsWith('data:')) {
+        const blob = dataURLToBlob(imageDataOrUrl);
+        // Convert Blob to File (required by API)
+        imageFile = new File([blob], 'image.png', { type: blob.type || 'image/png' });
+      } else {
+        // For URLs, fetch and convert to File
+        try {
+          const response = await fetch(imageDataOrUrl);
+          const blob = await response.blob();
+          const fileName = imageDataOrUrl.split('/').pop().split('?')[0] || 'image.png';
+          imageFile = new File([blob], fileName, { type: blob.type || 'image/png' });
+        } catch (error) {
+          throw new Error('Failed to fetch image. Please try selecting the image again.');
+        }
+      }
+      
+      // Create session with expectedInputs for images
+      session = await createLanguageModelSession({
+        initialPrompts: [
+          {
+            role: 'system',
+            content: 'You are a helpful language learning assistant. Help users learn languages by asking questions about images.',
+          },
+        ],
+        expectedInputs: [{ type: 'image' }],
+      });
+      
+      // Create prompt text
+      const promptText = `You are a helpful language learning assistant. The user has selected an image${alt ? ` with description: "${alt}"` : ''}.
+
+Your task is to formulate ONE simple, concise question about this image that would help the user learn a language better.
+
+Requirements:
+- Generate exactly ONE question
+- Make it simple and concise
+- Focus on language learning aspects (describing what you see, vocabulary, grammar, etc.)
+- The question should be answerable by looking at the image
+- Do not include any explanations or additional information
+- Just return the question itself`;
+
+      // Append user message with image
+      await session.append([
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              value: promptText,
+            },
+            {
+              type: 'image',
+              value: imageFile,
+            },
+          ],
+        },
+      ]);
+      
+      // Get response from the session
+      // After append, we can prompt with an empty string to get the response
+      const result = await session.prompt('');
+      
+      // Handle response
+      let responseText = null;
+      if (result.response && result.response.text) {
+        responseText = result.response.text;
+      } else if (result.response && typeof result.response === 'string') {
+        responseText = result.response;
+      } else if (result.text) {
+        responseText = result.text;
+      } else if (typeof result === 'string') {
+        responseText = result;
+      }
+      
+      if (!responseText) {
+        throw new Error('No response received from language model');
+      }
+      
+      const formulatedQuestion = responseText.trim();
+      
+      // Step 2: Translate question if target language is provided
+      let translatedQuestion = formulatedQuestion;
+      if (targetLanguage) {
+        console.log('Step 2: Translating image question to', targetLanguage);
+        try {
+          translatedQuestion = await translateText(formulatedQuestion, targetLanguage);
+          console.log('Translated question:', translatedQuestion);
+        } catch (translationError) {
+          console.warn('Translation failed, using original question:', translationError);
+          // Use original if translation fails
+        }
+      }
+      
+      return {
+        success: true,
+        response: translatedQuestion,
+        originalQuestion: formulatedQuestion,
+        actionType: 'question'
+      };
+      
+  } catch (error) {
+    console.error('Error in image question workflow:', error);
+    return {
+      success: false,
+      error: error.message,
+      response: null
+    };
+  } finally {
+    // Clean up session if it was created
+    if (session && typeof session.destroy === 'function') {
+      try {
+        await session.destroy();
+      } catch (destroyError) {
+        console.warn('Error destroying session:', destroyError);
+      }
+    }
+  }
+};
+
+// Process audio with Prompt API
+export const processAudioWithPrompt = async (audioFile, originalText = '', question = '', transcript = '', actionType = 'question') => {
+  let session = null;
+  
+  try {
+    // Create session with expectedInputs for audio
+    session = await createLanguageModelSession({
+      initialPrompts: [
+        {
+          role: 'system',
+          content: actionType === 'answer' 
+            ? 'You are a helpful language learning assistant. Evaluate the student\'s spoken answer and provide feedback.'
+            : 'You are a helpful language learning assistant. Help users learn languages by answering questions about the selected content.',
+        },
+      ],
+      expectedInputs: [{ type: 'audio' }],
+    });
+    
+    // Create prompt text based on action type
+    let promptText;
+    if (actionType === 'answer') {
+      // Use answer evaluation prompt similar to text-based answers
+      promptText = `You are a friendly language teacher having a conversation with a student. Respond naturally as if you're talking to them directly.
+
+ORIGINAL TEXT: "${originalText}"
+QUESTION ASKED: "${question}"
+${transcript ? `STUDENT'S ANSWER (transcript): "${transcript}"` : ''}
+
+Please listen to the student's spoken answer${transcript ? ' (transcript provided above)' : ''} and provide a natural, conversational response that:
+1. Acknowledges their answer in a friendly way
+2. Gives brief, encouraging feedback on their language use
+3. Asks a natural follow-up question that builds on the conversation
+4. If there's nothing meaningful to ask, naturally suggest moving to the next piece of text
+
+Requirements:
+- Write as one natural message (not structured sections)
+- Be conversational and friendly
+- Keep it brief and natural
+- Sound like a real teacher talking to a student`;
+    } else {
+      promptText = `You are a helpful language learning assistant. The user has selected this content: "${originalText || 'No content selected'}"
+
+${transcript ? `They asked (transcript): "${transcript}"` : 'Please listen to their spoken question about this content.'}
+
+Provide a helpful answer that will help them learn the language better.`;
+    }
+    
+    // Append user message with audio
+    await session.append([
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            value: promptText,
+          },
+          {
+            type: 'audio',
+            value: audioFile,
+          },
+        ],
+      },
+    ]);
+    
+    // Get response from the session
+    const result = await session.prompt('');
+    
+    // Handle response
+    let responseText = null;
+    if (result.response && result.response.text) {
+      responseText = result.response.text;
+    } else if (result.response && typeof result.response === 'string') {
+      responseText = result.response;
+    } else if (result.text) {
+      responseText = result.text;
+    } else if (typeof result === 'string') {
+      responseText = result;
+    }
+    
+    if (!responseText) {
+      throw new Error('No response received from language model');
+    }
+    
+    return {
+      success: true,
+      response: responseText.trim(),
+      actionType: actionType
+    };
+    
+  } catch (error) {
+    console.error('Error in audio processing workflow:', error);
+    return {
+      success: false,
+      error: error.message,
+      response: null
+    };
+  } finally {
+    // Clean up session if it was created
+    if (session && typeof session.destroy === 'function') {
+      try {
+        await session.destroy();
+      } catch (destroyError) {
+        console.warn('Error destroying session:', destroyError);
+      }
+    }
+  }
+};
+
+// Convert Blob to base64
+const blobToBase64 = (blob) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64String = reader.result.split(',')[1]; // Remove data:image/...;base64, prefix
+      resolve(base64String);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
 };
 
 // Process question formulation and translation workflow
