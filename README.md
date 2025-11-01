@@ -4,6 +4,8 @@
 
 [![Google Chrome Built-in AI Challenge 2025 Submission](https://img.shields.io/badge/Google%20Chrome%20AI%20Challenge-2025-blueviolet)](https://googlechromeai2025.devpost.com/)
 
+https://youtu.be/9mtZrF33Yf4
+
 ---
 
 ## Table of Contents
@@ -79,7 +81,7 @@ We've made it simple for you to test Langhub.
 1.  **Clone the Repository**:
 
     ```bash
-    git clone <repository-url>
+    git clone git@github.com:aogz/langhub.git
     cd langhub
     ```
 
