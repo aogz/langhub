@@ -223,7 +223,7 @@ export default function Classroom() {
         setLoadingAction(null);
       }
     }
-  }, [activeQuestionContext, chatHistory]);
+  }, [activeQuestionContext, chatHistory, selectedTexts]);
 
   // Stop recording without sending
   const stopRecording = useCallback(() => {

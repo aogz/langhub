@@ -13,7 +13,8 @@ const TopBar = ({
   backLinkText = 'Back to Classroom',
   onClose = null,
   isImmersiveMode = false,
-  onToggleImmersiveMode = null
+  onToggleImmersiveMode = null,
+  selectedTexts = []
 }) => {
   const { t } = useTranslation();
   const [showTranslatePopover, setShowTranslatePopover] = useState(false);
@@ -113,6 +114,17 @@ const TopBar = ({
   useEffect(() => {
     setTargetLanguage(nativeLanguage);
   }, [nativeLanguage]);
+
+  // Update source language when translate popover opens and there's a selected text
+  useEffect(() => {
+    if (showTranslatePopover && selectedTexts && selectedTexts.length > 0) {
+      const currentSelection = selectedTexts[selectedTexts.length - 1];
+      const detectedLanguage = currentSelection?.detectedLanguage;
+      if (detectedLanguage && detectedLanguage !== 'unknown') {
+        setSourceLanguage(detectedLanguage);
+      }
+    }
+  }, [showTranslatePopover, selectedTexts]);
 
   // Handle copy to clipboard
   const handleCopyToClipboard = async () => {

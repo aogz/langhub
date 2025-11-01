@@ -1,11 +1,78 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import SelectedTextBlock from './SelectedTextBlock';
 import TopBar from './TopBar';
 import { useInteractiveText } from '../hooks/useInteractiveText';
 import { processTextWithPrompt, processQuestionWorkflow, processImageQuestionWorkflow, checkPromptAPIAvailability } from '../utils/promptAPI';
-import { useUserSettings } from '../contexts/UserSettingsContext';
 import { useTranslation } from '../hooks/useTranslation';
+
+// Loading messages for different actions
+const LOADING_MESSAGES = {
+  'question': [
+    'Reading the text...',
+    'Analyzing the content...',
+    'Formulating the question...',
+    'Understanding the context...',
+    'Preparing your question...'
+  ],
+  'explain-grammar': [
+    'Analyzing grammar...',
+    'Identifying structures...',
+    'Understanding the rules...',
+    'Preparing explanation...',
+    'Examining syntax...'
+  ],
+  'answer': [
+    'Reading your answer...',
+    'Evaluating response...',
+    'Preparing feedback...',
+    'Analyzing your answer...',
+    'Formulating response...'
+  ],
+  'image-selection': [
+    'Looking at the image...',
+    'Analyzing the picture...',
+    'Understanding the image...',
+    'Examining details...',
+    'Processing visual content...'
+  ],
+  'default': [
+    'Thinking...',
+    'Processing...',
+    'Working on it...',
+    'Almost there...'
+  ]
+};
+
+// Hook to rotate loading messages
+function useLoadingMessage(actionType, isImage = false) {
+  const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
+
+  useEffect(() => {
+    if (!actionType) {
+      setCurrentMessageIndex(0);
+      return;
+    }
+
+    // Use image-specific messages if it's a question action on an image
+    const messageKey = (actionType === 'question' && isImage) ? 'image-selection' : actionType;
+    const messages = LOADING_MESSAGES[messageKey] || LOADING_MESSAGES.default;
+    
+    // Rotate messages every 2 seconds
+    const interval = setInterval(() => {
+      setCurrentMessageIndex((prevIndex) => (prevIndex + 1) % messages.length);
+    }, 2000);
+
+    // Reset to first message when action changes
+    setCurrentMessageIndex(0);
+
+    return () => clearInterval(interval);
+  }, [actionType, isImage]);
+
+  const messageKey = (actionType === 'question' && isImage) ? 'image-selection' : actionType;
+  const messages = actionType ? (LOADING_MESSAGES[messageKey] || LOADING_MESSAGES.default) : LOADING_MESSAGES.default;
+  return messages[currentMessageIndex] || messages[0];
+}
 
 const TextResponse = ({ text, onWordAdded, actionType, getCurrentSource }) => {
   const { textContainerRef, renderInteractiveContent, Popup } = useInteractiveText(onWordAdded, getCurrentSource);
@@ -109,11 +176,14 @@ const UnifiedSidebar = ({
   currentTextId
 }) => {
   const { t } = useTranslation();
-  const { settings } = useUserSettings();
-  const nativeLanguage = settings?.nativeLanguage || 'en';
   const isDesktop = mode === 'desktop';
   const isMobile = mode === 'mobile';
   const isImmersive = mode === 'immersive';
+  
+  // Check if current selection is an image for appropriate loading messages
+  const currentSelection = selectedTexts.length > 0 ? selectedTexts[selectedTexts.length - 1] : null;
+  const isImage = currentSelection?.type === 'image';
+  const loadingMessage = useLoadingMessage(loadingAction, isImage);
 
   const handleHistoryItemClick = (textId) => {
     const itemToMove = selectedTexts.find(t => t.id === textId);
@@ -155,6 +225,7 @@ const UnifiedSidebar = ({
             isImmersiveMode={isImmersiveMode}
             onToggleImmersiveMode={toggleImmersiveMode}
             onClose={onClose}
+            selectedTexts={selectedTexts}
           />
         </div>
 
@@ -427,7 +498,7 @@ const UnifiedSidebar = ({
                       <div className={`max-w-[85%] ${isDesktop ? 'lg:max-w-[80%]' : ''} p-2 ${isDesktop ? 'lg:p-3' : ''} rounded-lg shadow-md bg-gray-700 text-gray-200 rounded-bl-none text-sm ${isDesktop ? 'lg:text-base' : ''}`}>
                         <div className="flex items-center">
                           <div className={`animate-spin rounded-full h-3 w-3 ${isDesktop ? 'lg:h-4 lg:w-4' : ''} border-b-2 border-white mr-2`}></div>
-                          Thinking...
+                          {loadingMessage}
                         </div>
                       </div>
                     </div>

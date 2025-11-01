@@ -87,7 +87,9 @@
         const step4 = step3.replace(/\t+/g, ' '); // Replace tabs with spaces
         console.log('After tab cleanup:', step4);
         
-        const step5 = step4.replace(/[^\w\s.,!?;:()[\]{}"'`~@#$%^&*+=|\\<>/]/g, ''); // Remove special characters but keep common punctuation
+        // Remove only control characters and zero-width characters, but preserve all Unicode letters, numbers, and punctuation
+        // This preserves accented characters, Cyrillic, Chinese, Japanese, Arabic, etc.
+        const step5 = step4.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u200B-\u200D\uFEFF]/g, ''); // Remove control and zero-width characters only
         console.log('After character cleanup:', step5);
         
         const final = step5.trim();
@@ -270,13 +272,20 @@
                 filter: brightness(1.1);
             }
 
-            /* Start Learning Button */
-            .text-selection-start-learning-btn {
+            /* Button Container */
+            .text-selection-buttons-container {
                 position: fixed;
                 bottom: 30px;
                 left: 50%;
                 transform: translateX(-50%);
                 z-index: 999998;
+                display: flex;
+                gap: 12px;
+                align-items: center;
+            }
+
+            /* Start Learning Button */
+            .text-selection-start-learning-btn {
                 background: linear-gradient(135deg, #3b82f6, #2563eb);
                 color: white;
                 border: none;
@@ -292,12 +301,132 @@
 
             .text-selection-start-learning-btn:hover {
                 background: linear-gradient(135deg, #2563eb, #1d4ed8);
-                transform: translateX(-50%) translateY(-2px);
+                transform: translateY(-2px);
                 box-shadow: 0 8px 30px rgba(59, 130, 246, 0.5);
             }
 
             .text-selection-start-learning-btn:active {
-                transform: translateX(-50%) translateY(0);
+                transform: translateY(0);
+            }
+
+            /* URL Navigation Button */
+            .text-selection-url-nav-btn {
+                background: linear-gradient(135deg, #10b981, #059669);
+                color: white;
+                border: none;
+                border-radius: 12px;
+                padding: 14px 16px;
+                font-size: 16px;
+                font-weight: 600;
+                cursor: pointer;
+                box-shadow: 0 4px 20px rgba(16, 185, 129, 0.4);
+                transition: all 0.3s ease;
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            .text-selection-url-nav-btn:hover {
+                background: linear-gradient(135deg, #059669, #047857);
+                transform: translateY(-2px);
+                box-shadow: 0 8px 30px rgba(16, 185, 129, 0.5);
+            }
+
+            .text-selection-url-nav-btn:active {
+                transform: translateY(0);
+            }
+
+            /* URL Input Overlay */
+            .text-selection-url-input-overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.7);
+                backdrop-filter: blur(4px);
+                z-index: 999999;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            .text-selection-url-input-container {
+                background: rgba(17, 24, 39, 0.95);
+                border: 1px solid rgba(55, 65, 81, 0.8);
+                border-radius: 16px;
+                padding: 24px;
+                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+                width: 90%;
+                max-width: 500px;
+            }
+
+            .text-selection-url-input-container h3 {
+                color: #ffffff;
+                font-size: 18px;
+                font-weight: 600;
+                margin-bottom: 16px;
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            }
+
+            .text-selection-url-input-field {
+                width: 100%;
+                padding: 12px 16px;
+                background: rgba(55, 65, 81, 0.8);
+                border: 1px solid rgba(75, 85, 99, 0.8);
+                border-radius: 8px;
+                font-size: 16px;
+                color: #f9fafb;
+                outline: none;
+                transition: all 0.3s ease;
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                margin-bottom: 16px;
+            }
+
+            .text-selection-url-input-field:focus {
+                border-color: #3b82f6;
+                box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15);
+                background: rgba(55, 65, 81, 0.9);
+            }
+
+            .text-selection-url-input-field::placeholder {
+                color: #9ca3af;
+            }
+
+            .text-selection-url-input-actions {
+                display: flex;
+                gap: 12px;
+                justify-content: flex-end;
+            }
+
+            .text-selection-url-input-btn {
+                padding: 10px 20px;
+                border: none;
+                border-radius: 8px;
+                font-size: 14px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: all 0.3s ease;
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            }
+
+            .text-selection-url-input-btn-cancel {
+                background: rgba(55, 65, 81, 0.8);
+                color: #f9fafb;
+            }
+
+            .text-selection-url-input-btn-cancel:hover {
+                background: rgba(75, 85, 99, 0.9);
+            }
+
+            .text-selection-url-input-btn-submit {
+                background: linear-gradient(135deg, #3b82f6, #2563eb);
+                color: white;
+            }
+
+            .text-selection-url-input-btn-submit:hover {
+                background: linear-gradient(135deg, #2563eb, #1d4ed8);
             }
 
             /* Loader Styles */
@@ -641,9 +770,14 @@
         }
 
         // If there is an active text selection, do not treat this as a paragraph click
+        // But only if the selection is meaningful (more than just a few characters)
         const selection = window.getSelection && window.getSelection();
-        if (selection && selection.type === 'Range' && selection.toString().trim().length > 0) {
-            return;
+        if (selection && selection.type === 'Range') {
+            const selectedText = selection.toString().trim();
+            if (selectedText && selectedText.length >= 10) {
+                // User is selecting text, don't trigger paragraph click
+                return;
+            }
         }
 
         const paragraph = event.currentTarget;
@@ -852,23 +986,44 @@
         invalidateClickableElementsCache();
     }
 
-    // Handle text selection (keep existing functionality)
+    // Track last sent selection to avoid duplicates
+    let lastSentSelection = '';
+    let selectionTimeout = null;
+
+    // Handle text selection (improved to work alongside paragraph clicking)
     function handleTextSelection() {
         const selection = window.getSelection();
-        const selectedText = selection.toString();
-
-        if (selectedText && selectedText.trim().length > 0) {
+        if (!selection || selection.rangeCount === 0) return;
+        
+        const selectedText = selection.toString().trim();
+        
+        // Only process meaningful selections (at least 10 characters to avoid accidental single word selections)
+        if (selectedText && selectedText.length >= 10 && selectedText !== lastSentSelection) {
             console.log('Text selected:', selectedText);
+            lastSentSelection = selectedText;
             sendTextToLanghub(selectedText, 'manual');
+            
+            // Clear the selection after sending (with a small delay for visual feedback)
+            setTimeout(() => {
+                if (window.getSelection) {
+                    window.getSelection().removeAllRanges();
+                }
+                lastSentSelection = ''; // Reset after a bit to allow re-selecting the same text
+            }, 500);
         }
     }
 
     // Handle mouse up events (when selection ends)
     function handleMouseUp(event) {
+        // Clear any existing timeout
+        if (selectionTimeout) {
+            clearTimeout(selectionTimeout);
+        }
+        
         // Small delay to ensure selection is complete
-        setTimeout(() => {
+        selectionTimeout = setTimeout(() => {
             handleTextSelection();
-        }, 100);
+        }, 150);
     }
 
     // Observe DOM changes to handle dynamically added content
@@ -1073,11 +1228,154 @@
     function updateButtonText(text) {
         const button = document.querySelector('.text-selection-start-learning-btn');
         if (button) {
-            button.textContent = text;
-            button.title = text === 'Next' 
-                ? 'Click to select the next text block or image on the page'
-                : 'Click to select the first text block or image on the page';
+            if (text === 'Next') {
+                // Show "Next" with arrow down icon
+                button.innerHTML = `
+                    <span style="display: flex; align-items: center; gap: 8px;">
+                        <span>Next</span>
+                        <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </span>
+                `;
+                button.title = 'Click to select the next text block or image on the page';
+            } else {
+                // Show "Start learning" as plain text
+                button.textContent = text;
+                button.title = 'Click to select the first text block or image on the page';
+            }
         }
+    }
+
+    // Handle URL navigation
+    function handleUrlNavigation(url) {
+        if (!url || !url.trim()) return;
+        
+        let finalUrl = url.trim();
+        
+        // Add protocol if missing
+        if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
+            finalUrl = 'https://' + finalUrl;
+        }
+        
+        // Validate URL before navigating
+        try {
+            new URL(finalUrl);
+            window.location.href = finalUrl;
+        } catch (error) {
+            alert('Invalid URL. Please enter a valid URL.');
+        }
+    }
+
+    // Show URL input overlay
+    function showUrlInputOverlay() {
+        // Remove existing overlay if any
+        const existingOverlay = document.querySelector('.text-selection-url-input-overlay');
+        if (existingOverlay) {
+            existingOverlay.remove();
+        }
+
+        // Create overlay
+        const overlay = document.createElement('div');
+        overlay.className = 'text-selection-url-input-overlay';
+        
+        // Create container
+        const container = document.createElement('div');
+        container.className = 'text-selection-url-input-container';
+        
+        // Create title
+        const title = document.createElement('h3');
+        title.textContent = 'Navigate to URL';
+        container.appendChild(title);
+        
+        // Create input field
+        const input = document.createElement('input');
+        input.type = 'url';
+        input.className = 'text-selection-url-input-field';
+        input.placeholder = 'Enter website URL...';
+        input.autofocus = true;
+        container.appendChild(input);
+        
+        // Create actions container
+        const actions = document.createElement('div');
+        actions.className = 'text-selection-url-input-actions';
+        
+        // Create cancel button
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = 'text-selection-url-input-btn text-selection-url-input-btn-cancel';
+        cancelBtn.textContent = 'Cancel';
+        cancelBtn.addEventListener('click', () => {
+            overlay.remove();
+        });
+        actions.appendChild(cancelBtn);
+        
+        // Create submit button
+        const submitBtn = document.createElement('button');
+        submitBtn.className = 'text-selection-url-input-btn text-selection-url-input-btn-submit';
+        submitBtn.textContent = 'Go';
+        submitBtn.addEventListener('click', () => {
+            handleUrlNavigation(input.value);
+        });
+        actions.appendChild(submitBtn);
+        
+        // Handle Enter key
+        input.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                handleUrlNavigation(input.value);
+            }
+        });
+        
+        // Handle Escape key
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                overlay.remove();
+            }
+        });
+        
+        // Close on overlay click (outside container)
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                overlay.remove();
+            }
+        });
+        
+        container.appendChild(actions);
+        overlay.appendChild(container);
+        document.body.appendChild(overlay);
+        
+        // Focus input
+        setTimeout(() => input.focus(), 100);
+    }
+
+    // Create and add URL navigation button
+    function addUrlNavigationButton() {
+        // Remove existing button if any
+        const existingButton = document.querySelector('.text-selection-url-nav-btn');
+        if (existingButton) {
+            existingButton.remove();
+        }
+
+        // Create button container if it doesn't exist
+        let container = document.querySelector('.text-selection-buttons-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.className = 'text-selection-buttons-container';
+            document.body.appendChild(container);
+        }
+
+        // Create URL navigation button
+        const urlButton = document.createElement('button');
+        urlButton.className = 'text-selection-url-nav-btn';
+        urlButton.title = 'Navigate to URL';
+        urlButton.innerHTML = `
+            <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+            </svg>
+        `;
+        urlButton.addEventListener('click', showUrlInputOverlay);
+        
+        // Insert URL button before the Start Learning button
+        container.insertBefore(urlButton, container.firstChild);
     }
 
     // Create and add Start Learning button
@@ -1088,6 +1386,14 @@
             existingButton.remove();
         }
 
+        // Create button container if it doesn't exist
+        let container = document.querySelector('.text-selection-buttons-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.className = 'text-selection-buttons-container';
+            document.body.appendChild(container);
+        }
+
         // Create button
         const button = document.createElement('button');
         button.className = 'text-selection-start-learning-btn';
@@ -1095,8 +1401,8 @@
         button.title = 'Click to select the first text block or image on the page';
         button.addEventListener('click', handleButtonClick);
 
-        // Add to document
-        document.body.appendChild(button);
+        // Add to container
+        container.appendChild(button);
 
         // Debounced selection observer
         let selectionCheckTimeout = null;
@@ -1131,7 +1437,10 @@
         // Update button visibility based on available clickable elements
         function updateButtonVisibility() {
             const hasClickableElements = findFirstClickableElement() !== null;
-            button.style.display = hasClickableElements ? 'block' : 'none';
+            const container = document.querySelector('.text-selection-buttons-container');
+            if (container) {
+                container.style.display = hasClickableElements ? 'flex' : 'none';
+            }
         }
 
         // Initial check
@@ -1172,9 +1481,10 @@
         // Also listen for touch events on mobile
         document.addEventListener('touchend', handleMouseUp);
 
-        // Add Start Learning button
+        // Add URL navigation button and Start Learning button
         // Delay slightly to ensure elements are processed
         setTimeout(() => {
+            addUrlNavigationButton();
             addStartLearningButton();
         }, 500);
         
@@ -1213,18 +1523,27 @@
             tooltip.parentNode.removeChild(tooltip);
         }
         
-        // Remove Start Learning button
-        const startButton = document.querySelector('.text-selection-start-learning-btn');
-        if (startButton) {
-            // Remove event listener
-            if (startButton._clickHandler) {
-                document.removeEventListener('click', startButton._clickHandler, true);
+        // Remove buttons container (includes both URL nav and Start Learning buttons)
+        const buttonsContainer = document.querySelector('.text-selection-buttons-container');
+        if (buttonsContainer) {
+            const startButton = buttonsContainer.querySelector('.text-selection-start-learning-btn');
+            if (startButton) {
+                // Remove event listener
+                if (startButton._clickHandler) {
+                    document.removeEventListener('click', startButton._clickHandler, true);
+                }
+                // Clear interval
+                if (startButton._visibilityInterval) {
+                    clearInterval(startButton._visibilityInterval);
+                }
             }
-            // Clear interval
-            if (startButton._visibilityInterval) {
-                clearInterval(startButton._visibilityInterval);
-            }
-            startButton.remove();
+            buttonsContainer.remove();
+        }
+        
+        // Remove URL input overlay if open
+        const urlOverlay = document.querySelector('.text-selection-url-input-overlay');
+        if (urlOverlay) {
+            urlOverlay.remove();
         }
         
         // Remove styles

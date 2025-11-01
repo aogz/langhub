@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Portal from '../components/Portal';
 import { addWord } from '../utils/vocabularyStorage';
 import { useUserSettings } from '../contexts/UserSettingsContext';
+import { detectLanguage } from '../utils/languageDetection';
 
 // This hook encapsulates all the logic for making text interactive.
 export const useInteractiveText = (onWordAdded, getCurrentSource) => {
@@ -136,10 +137,25 @@ export const useInteractiveText = (onWordAdded, getCurrentSource) => {
       const TranslatorAPI = typeof window !== 'undefined' ? window.Translator : undefined;
       if (TranslatorAPI && isChrome138Plus) {
         try {
-          // Detect source language from the text (default to Dutch if can't detect)
-          // For now, we'll try to detect or use a sensible default
-          // In a real scenario, you might want to detect the source language first
-          const sourceLanguage = 'nl'; // Default source - could be enhanced with language detection
+          // Detect source language from the selected text
+          let sourceLanguage = 'nl'; // Default fallback to Dutch
+          
+          try {
+            const detectionResult = await detectLanguage(text);
+            if (detectionResult && detectionResult.detectedLanguage && detectionResult.detectedLanguage !== 'unknown') {
+              sourceLanguage = detectionResult.detectedLanguage;
+              console.log('Detected source language:', sourceLanguage, 'for text:', text.substring(0, 50));
+            }
+          } catch (detectionError) {
+            console.warn('Language detection failed, using default (Dutch):', detectionError);
+          }
+          
+          // If source and target languages are the same, don't translate
+          if (sourceLanguage === targetLanguage) {
+            setTranslationPopup(prev => prev ? { ...prev, translation: text, showSuccess: false } : null);
+            return;
+          }
+          
           const translator = await TranslatorAPI.create({
             sourceLanguage,
             targetLanguage,
@@ -389,7 +405,10 @@ export const useInteractiveText = (onWordAdded, getCurrentSource) => {
       const result = words.map((word, index) => {
         if (word.trim() === '') return <span key={index}>{word}</span>;
         
-        const cleanWord = word.replace(/[^\w\s'-]/g, '').trim();
+        // Preserve Unicode characters - only remove control characters and zero-width characters
+        // Keep all letters (including accented, Cyrillic, Chinese, Japanese, Arabic, etc.), numbers, and common punctuation
+        // eslint-disable-next-line no-control-regex
+        const cleanWord = word.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\u200B-\u200D\uFEFF]/g, '').trim() || word.trim();
         const currentWordIndex = wordIndex;
         clickableWords.push(cleanWord);
         wordIndex++;
