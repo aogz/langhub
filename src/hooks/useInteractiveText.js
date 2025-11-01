@@ -1,9 +1,12 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Portal from '../components/Portal';
 import { addWord } from '../utils/vocabularyStorage';
+import { useUserSettings } from '../contexts/UserSettingsContext';
 
 // This hook encapsulates all the logic for making text interactive.
 export const useInteractiveText = (onWordAdded, getCurrentSource) => {
+  const { settings } = useUserSettings();
+  const nativeLanguage = settings?.nativeLanguage || 'en';
   const [translationPopup, setTranslationPopup] = useState(null);
   const [isTranslating, setIsTranslating] = useState(false);
   const [isAddingToVocab, setIsAddingToVocab] = useState(false);
@@ -109,7 +112,7 @@ export const useInteractiveText = (onWordAdded, getCurrentSource) => {
     setIsTranslating(true);
 
     try {
-      const targetLanguage = 'en';
+      const targetLanguage = nativeLanguage;
       const isChrome138Plus = (() => {
         try {
           const nav = navigator;
@@ -133,7 +136,10 @@ export const useInteractiveText = (onWordAdded, getCurrentSource) => {
       const TranslatorAPI = typeof window !== 'undefined' ? window.Translator : undefined;
       if (TranslatorAPI && isChrome138Plus) {
         try {
-          const sourceLanguage = targetLanguage !== 'en' ? 'en' : 'nl';
+          // Detect source language from the text (default to Dutch if can't detect)
+          // For now, we'll try to detect or use a sensible default
+          // In a real scenario, you might want to detect the source language first
+          const sourceLanguage = 'nl'; // Default source - could be enhanced with language detection
           const translator = await TranslatorAPI.create({
             sourceLanguage,
             targetLanguage,
@@ -170,7 +176,7 @@ export const useInteractiveText = (onWordAdded, getCurrentSource) => {
         word: word,
         translation: translationPopup?.translation || '',
         language: 'auto',
-        targetLanguage: 'en',
+        targetLanguage: nativeLanguage,
         addedAt: new Date().toISOString(),
         source: getCurrentSource ? (getCurrentSource() || null) : null
       });

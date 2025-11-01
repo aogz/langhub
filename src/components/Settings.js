@@ -21,25 +21,6 @@ const Settings = () => {
     { code: 'nl', name: 'Nederlands', flag: '🇳🇱' }
   ];
 
-  const learningLanguages = [
-    { code: 'nl', name: 'Dutch', flag: '🇳🇱' },
-    { code: 'es', name: 'Spanish', flag: '🇪🇸' },
-    { code: 'de', name: 'German', flag: '🇩🇪' },
-    { code: 'it', name: 'Italian', flag: '🇮🇹' },
-    { code: 'fr', name: 'French', flag: '🇫🇷' }
-  ];
-
-  const voiceOptions = [
-    { value: 'female', label: 'Female Voice', icon: '👩' },
-    { value: 'male', label: 'Male Voice', icon: '👨' }
-  ];
-
-  const modeOptions = [
-    { value: 'voice', label: 'Voice Only', icon: '🔊', description: 'Audio responses only' },
-    { value: 'text', label: 'Text Only', icon: '📝', description: 'Text responses only' },
-    { value: 'both', label: 'Voice + Text', icon: '🔊📝', description: 'Audio with visible text' }
-  ];
-
   // Update local settings when context settings change
   React.useEffect(() => {
     setLocalSettings(settings);
@@ -112,82 +93,6 @@ const Settings = () => {
                     >
                       <span className="text-2xl">{lang.flag}</span>
                       <span className="font-medium">{lang.name}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Learning Language */}
-              <div>
-                <h3 className="text-xl font-semibold text-white mb-4">Learning Language</h3>
-                <p className="text-gray-400 mb-4">The language you want to learn</p>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  {learningLanguages.map((lang) => (
-                    <button
-                      key={lang.code}
-                      onClick={() => handleSettingChange('learningLanguage', lang.code)}
-                                             className={`p-4 rounded-lg border-2 transition-all duration-200 flex items-center gap-3 ${
-                         localSettings.learningLanguage === lang.code
-                           ? 'border-green-500 bg-green-500/20 text-green-400'
-                           : 'border-gray-600 bg-gray-800/50 text-gray-300 hover:border-gray-500'
-                       }`}
-                    >
-                      <span className="text-2xl">{lang.flag}</span>
-                      <span className="font-medium">{lang.name}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Voice Preference */}
-              <div>
-                <h3 className="text-xl font-semibold text-white mb-4">Voice Preference</h3>
-                <p className="text-gray-400 mb-4">Choose your preferred voice for audio responses</p>
-                <div className="grid grid-cols-2 gap-3">
-                  {voiceOptions.map((voice) => (
-                    <button
-                      key={voice.value}
-                      onClick={() => handleSettingChange('voice', voice.value)}
-                                             className={`p-4 rounded-lg border-2 transition-all duration-200 flex items-center gap-3 ${
-                         localSettings.voice === voice.value
-                           ? 'border-purple-500 bg-purple-500/20 text-purple-400'
-                           : 'border-gray-600 bg-gray-800/50 text-gray-300 hover:border-gray-500'
-                       }`}
-                    >
-                      <span className="text-2xl">{voice.icon}</span>
-                      <span className="font-medium">{voice.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Mode Preference */}
-              <div>
-                <h3 className="text-xl font-semibold text-white mb-4">Response Mode</h3>
-                <p className="text-gray-400 mb-4">How would you like to receive AI responses?</p>
-                <div className="space-y-3">
-                  {modeOptions.map((mode) => (
-                    <button
-                      key={mode.value}
-                      onClick={() => handleSettingChange('mode', mode.value)}
-                                             className={`w-full p-4 rounded-lg border-2 transition-all duration-200 flex items-center justify-between ${
-                         localSettings.mode === mode.value
-                           ? 'border-orange-500 bg-orange-500/20 text-orange-400'
-                           : 'border-gray-600 bg-gray-800/50 text-gray-300 hover:border-gray-500'
-                       }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="text-2xl">{mode.icon}</span>
-                        <div className="text-left">
-                          <div className="font-medium">{mode.label}</div>
-                          <div className="text-sm opacity-75">{mode.description}</div>
-                        </div>
-                      </div>
-                                             {localSettings.mode === mode.value && (
-                         <svg className="w-6 h-6 text-orange-400" fill="currentColor" viewBox="0 0 20 20">
-                           <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                         </svg>
-                       )}
                     </button>
                   ))}
                 </div>

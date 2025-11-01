@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { useUserSettings } from '../contexts/UserSettingsContext';
 
 const TopBar = ({ 
   title, 
@@ -14,10 +15,12 @@ const TopBar = ({
   onToggleImmersiveMode = null
 }) => {
   const [showTranslatePopover, setShowTranslatePopover] = useState(false);
+  const { settings } = useUserSettings();
+  const nativeLanguage = settings?.nativeLanguage || 'en';
   const [translationText, setTranslationText] = useState('');
   const [translatedText, setTranslatedText] = useState('');
   const [sourceLanguage, setSourceLanguage] = useState('nl');
-  const [targetLanguage, setTargetLanguage] = useState('en');
+  const [targetLanguage, setTargetLanguage] = useState(nativeLanguage);
   const [isTranslating, setIsTranslating] = useState(false);
   const popoverRef = useRef(null);
 
@@ -101,7 +104,12 @@ const TopBar = ({
     }, 500); // 500ms debounce
 
     return () => clearTimeout(timeoutId);
-  }, [translationText, sourceLanguage, targetLanguage]);
+  }, [translationText, sourceLanguage, targetLanguage, nativeLanguage]);
+  
+  // Update target language when native language changes
+  useEffect(() => {
+    setTargetLanguage(nativeLanguage);
+  }, [nativeLanguage]);
 
   // Handle copy to clipboard
   const handleCopyToClipboard = async () => {

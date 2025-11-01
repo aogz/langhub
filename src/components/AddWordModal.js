@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
+import { useUserSettings } from '../contexts/UserSettingsContext';
 
 const AddWordModal = ({ onAdd, isAdding, error, onClose }) => {
+  const { settings } = useUserSettings();
+  const nativeLanguage = settings?.nativeLanguage || 'en';
   const [word, setWord] = useState('');
   const [translation, setTranslation] = useState('');
   const [language, setLanguage] = useState('');
@@ -18,7 +21,7 @@ const AddWordModal = ({ onAdd, isAdding, error, onClose }) => {
     if (!word.trim()) return;
     setIsTranslating(true);
     try {
-      const targetLanguage = 'en';
+      const targetLanguage = nativeLanguage;
       const isChrome138Plus = (() => {
         try {
           const nav = navigator;
@@ -42,7 +45,8 @@ const AddWordModal = ({ onAdd, isAdding, error, onClose }) => {
       const TranslatorAPI = typeof window !== 'undefined' ? window.Translator : undefined;
       if (TranslatorAPI && isChrome138Plus) {
         try {
-          const sourceLanguage = targetLanguage !== 'en' ? 'en' : 'nl';
+          // Default source language to Dutch (most common content language)
+          const sourceLanguage = 'nl';
           const translator = await TranslatorAPI.create({
             sourceLanguage,
             targetLanguage,

@@ -4,6 +4,7 @@ import SelectedTextBlock from './SelectedTextBlock';
 import TopBar from './TopBar';
 import { useInteractiveText } from '../hooks/useInteractiveText';
 import { processTextWithPrompt, processQuestionWorkflow, processImageQuestionWorkflow, checkPromptAPIAvailability } from '../utils/promptAPI';
+import { useUserSettings } from '../contexts/UserSettingsContext';
 
 const TextResponse = ({ text, onWordAdded, actionType, getCurrentSource }) => {
   const { textContainerRef, renderInteractiveContent, Popup } = useInteractiveText(onWordAdded, getCurrentSource);
@@ -106,6 +107,8 @@ const UnifiedSidebar = ({
   switchToChatSession,
   currentTextId
 }) => {
+  const { settings } = useUserSettings();
+  const nativeLanguage = settings?.nativeLanguage || 'en';
   const isDesktop = mode === 'desktop';
   const isMobile = mode === 'mobile';
   const isImmersive = mode === 'immersive';
@@ -320,10 +323,10 @@ const UnifiedSidebar = ({
                             data = await processImageQuestionWorkflow(
                               currentSelection.imageData || currentSelection.imageUrl, 
                               currentSelection.alt || '',
-                              currentSelection.detectedLanguage || null
+                              nativeLanguage
                             );
                           } else {
-                            data = await processQuestionWorkflow(currentSelection.content);
+                            data = await processQuestionWorkflow(currentSelection.content, nativeLanguage);
                           }
                         } else {
                           if (isImage) {

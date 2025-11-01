@@ -231,7 +231,8 @@ export const processAnswerEvaluationWorkflow = async (originalText, question, us
     let translatedEvaluation = evaluation;
     if (targetLanguage) {
       console.log('Step 2: Translating evaluation to', targetLanguage);
-      translatedEvaluation = await translateText(evaluation, targetLanguage);
+      // Default source language to Dutch (most common content language)
+      translatedEvaluation = await translateText(evaluation, targetLanguage, 'nl');
       console.log('Translated evaluation:', translatedEvaluation);
     } else {
       // Try to detect language from original text
@@ -369,7 +370,8 @@ Requirements:
       if (targetLanguage) {
         console.log('Step 2: Translating image question to', targetLanguage);
         try {
-          translatedQuestion = await translateText(formulatedQuestion, targetLanguage);
+          // Default source language to Dutch (most common content language)
+          translatedQuestion = await translateText(formulatedQuestion, targetLanguage, 'nl');
           console.log('Translated question:', translatedQuestion);
         } catch (translationError) {
           console.warn('Translation failed, using original question:', translationError);
@@ -577,7 +579,7 @@ export const processQuestionWorkflow = async (selectedText, targetLanguage = nul
 };
 
 // Translate text using the same translation API used for word translations
-const translateText = async (text, targetLanguage) => {
+const translateText = async (text, targetLanguage, sourceLanguage = null) => {
   try {
     // Use the same translation API used for word translations
     const TranslatorAPI = typeof window !== 'undefined' ? window.Translator : undefined;
@@ -586,10 +588,13 @@ const translateText = async (text, targetLanguage) => {
       throw new Error('Translation API not available');
     }
 
+    // If source language not provided, try to detect it
+    // Default to Dutch if can't detect (since most content is likely Dutch)
+    const detectedSourceLanguage = sourceLanguage || 'nl';
+    
     // Create translator instance with source and target languages
-    const sourceLanguage = targetLanguage !== 'en' ? 'en' : 'nl';
     const translator = await TranslatorAPI.create({
-      sourceLanguage,
+      sourceLanguage: detectedSourceLanguage,
       targetLanguage,
     });
     
