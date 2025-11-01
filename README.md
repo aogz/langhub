@@ -1,6 +1,6 @@
 # 🚀 Langhub: Your AI-Powered Language Learning Classroom
 
-**Langhub is a revolutionary web application that transforms any content into an interactive language learning environment. Learn languages naturally by reading real content—articles, blogs, news—with AI-powered assistance powered by Chrome's built-in AI.**
+**Langhub is a revolutionary web application that transforms any content into an interactive language learning environment. Learn languages naturally by reading real content—articles, blogs, news—with AI-powered assistance powered by Chrome's built-in AI and Webfuse Web Augmentation Proxy.**
 
 [![Google Chrome Built-in AI Challenge 2025 Submission](https://img.shields.io/badge/Google%20Chrome%20AI%20Challenge-2025-blueviolet)](https://googlechromeai2025.devpost.com/)
 
