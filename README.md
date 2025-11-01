@@ -81,7 +81,7 @@ We've made it simple for you to test Langhub.
 1.  **Clone the Repository**:
 
     ```bash
-    git clone <repository-url>
+    git clone git@github.com:aogz/langhub.git
     cd langhub
     ```
 
