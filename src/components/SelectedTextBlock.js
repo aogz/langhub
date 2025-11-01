@@ -179,6 +179,15 @@ export default function SelectedTextBlock({ content, source, isCollapsed, onTogg
               isLoading={loadingAction === 'question'}
               isDisabled={!!loadingAction}
             />
+            {!isImage && (
+              <ActionButton 
+                onClick={() => onAction('explain-grammar')} 
+                icon="📚" 
+                label="Explain grammar" 
+                isLoading={loadingAction === 'explain-grammar'}
+                isDisabled={!!loadingAction}
+              />
+            )}
           </div>
         </div>
       )}

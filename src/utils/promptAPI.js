@@ -132,6 +132,21 @@ Please provide a detailed, helpful answer that will help them learn. Include:
 Keep your response educational and encouraging.`;
 };
 
+// Create prompt for grammar explanation
+const createGrammarExplanationPrompt = (text) => {
+  return `You are a helpful language learning assistant specializing in grammar. The user has selected this text:
+
+"${text}"
+
+Please explain the grammar in this text. Your explanation must be:
+- CONCISE (2-4 sentences maximum)
+- UNDERSTANDABLE (use simple language, avoid jargon)
+- SHORT (keep it brief and to the point)
+- Focus on the key grammatical structures, patterns, or rules demonstrated in the text
+
+Only explain the most important or interesting grammar points. Do not list every grammatical element.`;
+};
+
 
 // Process text with streaming response (for longer responses)
 export const processTextWithStreamingPrompt = async (text, actionType, context = {}, onChunk) => {
@@ -152,6 +167,9 @@ export const processTextWithStreamingPrompt = async (text, actionType, context =
         break;
       case 'answer':
         prompt = createAnswerPrompt(text, context);
+        break;
+      case 'explain-grammar':
+        prompt = createGrammarExplanationPrompt(text);
         break;
       default:
         throw new Error(`Unknown action type: ${actionType}`);
@@ -607,6 +625,9 @@ export const processTextWithPrompt = async (text, actionType = 'question', conte
         break;
       case 'answer':
         prompt = createAnswerPrompt(text, context);
+        break;
+      case 'explain-grammar':
+        prompt = createGrammarExplanationPrompt(text);
         break;
       default:
         throw new Error(`Unknown action type: ${actionType}`);
