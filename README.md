@@ -32,11 +32,9 @@ Traditional language learning apps force you into artificial environments, away 
 
 No more copy-pasting, no more context switching. Just pure, uninterrupted immersion.
 
-Paste or import text into your personalized classroom, or use the optional browser extension to seamlessly capture content from webpages. Highlight words for instant translation, ask questions, get grammar explanations, and build your vocabulary—all powered by Chrome's built-in AI, running entirely on your device.
-
 ## ✨ Features
 
--   **Content Import**: Easily paste text or use the optional browser extension to capture content from webpages directly into your classroom
+-   **Content Import**: Capture content from webpages directly into your classroom using Webfuse Web Augmentation Proxy technology
 -   **Interactive Word Selection**: Click and highlight words within selected text blocks for instant translation
 -   **Instant, On-Device Translation**: Get real-time translations for words and phrases using Chrome's Translator API
 -   **Contextual Q&A**: Ask questions about selected text and receive AI-powered explanations tailored to your learning level
@@ -127,7 +125,6 @@ We've made it simple for you to test Langhub.
     -   Open Langhub in your browser
     -   Copy text from any webpage, article, or document
     -   Paste it directly into the Langhub classroom
-    -   Or use the optional browser extension: navigate to any webpage, select text or images, and they'll automatically appear in your classroom
 
 2.  **Interactive Translation**:
 
@@ -145,7 +142,6 @@ We've made it simple for you to test Langhub.
 4.  **Learn with Images**:
 
     -   Paste or import images into your classroom
-    -   Or use the optional browser extension to capture images from webpages
     -   Click **"Ask about this image"** to generate language learning questions about the image
 
 5.  **Practice Your Vocabulary**:
