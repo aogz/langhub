@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "Langhub",
+  "version": "1.0.0",
+  "description": "A browser extension for Langhub",
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"]
+    }
+  ],
+  "chrome_url_overrides": {
+    "newtab": "startpage.html"
+  }
+}

@@ -9,6 +9,7 @@ export const useInteractiveText = (onWordAdded, getCurrentSource) => {
   const [isAddingToVocab, setIsAddingToVocab] = useState(false);
   const [selectedWords, setSelectedWords] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
+  const [hoveredWordIndex, setHoveredWordIndex] = useState(null);
   const popupRef = useRef(null);
   const textContainerRef = useRef(null);
   const abortControllerRef = useRef(null);
@@ -203,12 +204,20 @@ export const useInteractiveText = (onWordAdded, getCurrentSource) => {
     event.stopPropagation();
     if (!word?.trim()) return;
     setIsDragging(true);
+    setHoveredWordIndex(null); // Clear hover when starting selection
     setSelectedWords([word]);
     setSelectionStartIndex(wordIndex);
   }, []);
 
   const handleWordMouseEnter = useCallback((event, word, wordIndex) => {
-    if (!isDragging || !word?.trim() || selectionStartIndex === null) return;
+    // Handle hover highlight (not dragging)
+    if (!isDragging) {
+      setHoveredWordIndex(wordIndex);
+      return;
+    }
+    
+    // Handle selection dragging
+    if (!word?.trim() || selectionStartIndex === null) return;
     event.preventDefault();
     event.stopPropagation();
     
@@ -225,6 +234,12 @@ export const useInteractiveText = (onWordAdded, getCurrentSource) => {
     
     setSelectedWords(sequentialWords);
   }, [isDragging, selectionStartIndex]);
+
+  const handleWordMouseLeave = useCallback(() => {
+    if (!isDragging) {
+      setHoveredWordIndex(null);
+    }
+  }, [isDragging]);
 
   // Helper to open translation from current selectedWords on mobile after state updates
   const openTranslationFromSelection = useCallback(() => {
@@ -325,6 +340,19 @@ export const useInteractiveText = (onWordAdded, getCurrentSource) => {
     return () => document.removeEventListener('mouseup', handleGlobalMouseUp);
   }, [isDragging, selectedWords, handleTranslate]);
 
+  // Reset hover state when mouse leaves the container
+  useEffect(() => {
+    const container = textContainerRef.current;
+    if (!container) return;
+    
+    const handleMouseLeave = () => {
+      setHoveredWordIndex(null);
+    };
+    
+    container.addEventListener('mouseleave', handleMouseLeave);
+    return () => container.removeEventListener('mouseleave', handleMouseLeave);
+  }, []);
+
   // This new effect handles closing the popup and clearing highlights
   // when the user clicks outside of the popup or the interactive text area.
   useEffect(() => {
@@ -333,6 +361,7 @@ export const useInteractiveText = (onWordAdded, getCurrentSource) => {
         setTranslationPopup(null);
         setSelectedWords([]);
         setSelectionStartIndex(null);
+        setHoveredWordIndex(null);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -360,18 +389,39 @@ export const useInteractiveText = (onWordAdded, getCurrentSource) => {
         wordIndex++;
         
         const isSelected = selectedWords.includes(cleanWord);
+        // Calculate opacity based on distance from hovered word
+        let opacity = 1;
+        if (hoveredWordIndex !== null && !isDragging) {
+          const distance = Math.abs(hoveredWordIndex - currentWordIndex);
+          if (distance === 0) {
+            opacity = 1;
+          } else if (distance === 1) {
+            opacity = 0.9;
+          } else if (distance === 2) {
+            opacity = 0.8;
+          } else {
+            opacity = 0.7;
+          }
+        }
+        
         return (
           <span
             key={index}
-            className={`word-clickable cursor-pointer transition-colors duration-150 ease-in-out inline-block ${isSelected ? 'bg-blue-600 text-white rounded word-selected' : 'hover:border-blue-400'}`}
+            className={`word-clickable cursor-pointer transition-colors duration-150 ease-in-out inline-block ${
+              isSelected 
+                ? 'bg-blue-600 text-white rounded word-selected' 
+                : ''
+            }`}
             style={{ 
               padding: '0 2px',
               borderBottom: isSelected ? 'none' : '1px dashed rgba(156, 163, 175, 0.6)',
-              boxSizing: 'border-box',
-              display: 'inline-block'
+              display: 'inline-block',
+              opacity: opacity,
+              transition: 'color 150ms ease-in-out, background 150ms ease-in-out, opacity 150ms ease-in-out',
             }}
             onMouseDown={(e) => handleWordMouseDown(e, cleanWord || word, currentWordIndex)}
             onMouseEnter={(e) => handleWordMouseEnter(e, cleanWord || word, currentWordIndex)}
+            onMouseLeave={handleWordMouseLeave}
             onTouchStart={(e) => handleWordTouchStart(e, cleanWord || word, currentWordIndex)}
             onTouchMove={handleWordTouchMove}
             onTouchEnd={(e) => handleWordTouchEnd(e, cleanWord || word, currentWordIndex)}
@@ -398,8 +448,11 @@ export const useInteractiveText = (onWordAdded, getCurrentSource) => {
     });
   }, [
     selectedWords,
+    hoveredWordIndex,
+    isDragging,
     handleWordMouseDown,
     handleWordMouseEnter,
+    handleWordMouseLeave,
     handleWordTouchStart,
     handleWordTouchMove,
     handleWordTouchEnd,
