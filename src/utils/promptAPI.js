@@ -227,12 +227,13 @@ export const processAnswerEvaluationWorkflow = async (originalText, question, us
     const evaluation = evaluationResult.response.trim();
     console.log('Evaluation result:', evaluation);
     
-    // Step 2: Detect language if not provided and translate
+    // Step 2: Translate to content language (learning language)
+    // AI generates evaluations in English, so we translate from 'en' to the content language
     let translatedEvaluation = evaluation;
     if (targetLanguage) {
-      console.log('Step 2: Translating evaluation to', targetLanguage);
-      // Default source language to Dutch (most common content language)
-      translatedEvaluation = await translateText(evaluation, targetLanguage, 'nl');
+      console.log('Step 2: Translating evaluation from English to content language:', targetLanguage);
+      // Translate from English (AI response) to content language
+      translatedEvaluation = await translateText(evaluation, targetLanguage, 'en');
       console.log('Translated evaluation:', translatedEvaluation);
     } else {
       // Try to detect language from original text
@@ -241,7 +242,8 @@ export const processAnswerEvaluationWorkflow = async (originalText, question, us
         const languageInfo = await detectLanguage(originalText);
         if (languageInfo && languageInfo.detectedLanguage) {
           console.log('Step 2: Detected language:', languageInfo.detectedLanguage, 'Translating evaluation...');
-          translatedEvaluation = await translateText(evaluation, languageInfo.detectedLanguage);
+          // Translate from English (AI response) to detected language
+          translatedEvaluation = await translateText(evaluation, languageInfo.detectedLanguage, 'en');
           console.log('Translated evaluation:', translatedEvaluation);
         }
       } catch (detectionError) {

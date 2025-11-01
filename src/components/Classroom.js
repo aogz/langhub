@@ -163,17 +163,22 @@ export default function Classroom() {
           };
         }
 
+        // Get the content language from the current selection
+        const currentSelection = selectedTexts.length > 0 ? selectedTexts[selectedTexts.length - 1] : null;
+        const contentLanguage = currentSelection?.detectedLanguage || null;
+
         // Use the appropriate workflow based on action type
         let data;
         if (requestBody.actionType === 'question') {
-          data = await processQuestionWorkflow(requestBody.originalText || message);
+          data = await processQuestionWorkflow(requestBody.originalText || message, contentLanguage);
         } else if (requestBody.actionType === 'answer') {
           // Use answer evaluation workflow for answering questions
           data = await processAnswerEvaluationWorkflow(
             requestBody.originalText,
             requestBody.originalQuestion,
             message,
-            chatHistory
+            chatHistory,
+            contentLanguage
           );
         } else {
           data = await processTextWithPrompt(message, requestBody.actionType, {
