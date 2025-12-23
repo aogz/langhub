@@ -5,7 +5,8 @@ import { useUserSettings } from '../contexts/UserSettingsContext';
 import { detectLanguage } from '../utils/languageDetection';
 
 // This hook encapsulates all the logic for making text interactive.
-export const useInteractiveText = (onWordAdded, getCurrentSource) => {
+// detectedSourceLanguage: optional pre-detected language code to skip per-word detection
+export const useInteractiveText = (onWordAdded, getCurrentSource, detectedSourceLanguage = null) => {
   const { settings } = useUserSettings();
   const nativeLanguage = settings?.nativeLanguage || 'en';
   const [translationPopup, setTranslationPopup] = useState(null);
@@ -137,17 +138,21 @@ export const useInteractiveText = (onWordAdded, getCurrentSource) => {
       const TranslatorAPI = typeof window !== 'undefined' ? window.Translator : undefined;
       if (TranslatorAPI && isChrome138Plus) {
         try {
-          // Detect source language from the selected text
-          let sourceLanguage = 'nl'; // Default fallback to Dutch
+          // Use pre-detected language if available, otherwise detect from the selected text
+          let sourceLanguage = detectedSourceLanguage || 'nl'; // Default fallback to Dutch
           
-          try {
-            const detectionResult = await detectLanguage(text);
-            if (detectionResult && detectionResult.detectedLanguage && detectionResult.detectedLanguage !== 'unknown') {
-              sourceLanguage = detectionResult.detectedLanguage;
-              console.log('Detected source language:', sourceLanguage, 'for text:', text.substring(0, 50));
+          if (!detectedSourceLanguage) {
+            try {
+              const detectionResult = await detectLanguage(text);
+              if (detectionResult && detectionResult.detectedLanguage && detectionResult.detectedLanguage !== 'unknown') {
+                sourceLanguage = detectionResult.detectedLanguage;
+                console.log('Detected source language:', sourceLanguage, 'for text:', text.substring(0, 50));
+              }
+            } catch (detectionError) {
+              console.warn('Language detection failed, using default (Dutch):', detectionError);
             }
-          } catch (detectionError) {
-            console.warn('Language detection failed, using default (Dutch):', detectionError);
+          } else {
+            console.log('Using pre-detected source language:', sourceLanguage);
           }
           
           // If source and target languages are the same, don't translate

@@ -37,7 +37,9 @@ export default function SelectedTextBlock({ content, source, isCollapsed, onTogg
   
   // Provide source getter so vocabulary saves use the selection's page source instead of the app URL
   const getCurrentSource = React.useCallback(() => source || null, [source]);
-  const { textContainerRef, renderInteractiveContent, Popup } = useInteractiveText(onWordAdded, getCurrentSource);
+  // Pass the detected language to avoid re-detecting for every word click
+  const detectedLanguageCode = languageInfo?.detectedLanguage || null;
+  const { textContainerRef, renderInteractiveContent, Popup } = useInteractiveText(onWordAdded, getCurrentSource, detectedLanguageCode);
 
   // Detect language when content changes
   useEffect(() => {
